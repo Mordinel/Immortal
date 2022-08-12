@@ -31,7 +31,7 @@ impl Immortal {
      */
     pub fn new(socket_str: &str) -> Result<Self, String> {
         let listener = match TcpListener::bind(socket_str) {
-           Err(e) => return Err(format!("{:?}", e)),
+           Err(e) => return Err(e.to_string()),
            Ok(listener) => listener,
         };
        
@@ -43,13 +43,14 @@ impl Immortal {
     /**
      * Listens for incoming connections and sends them to handle_connection
      */
-    pub fn listen(&self) {
+    pub fn listen(&self) -> Result<(), String> {
         for stream in self.listener.incoming() {
             match stream {
-                Err(e) => println!("{:?}", e),
+                Err(e) => return Err(e.to_string()),
                 Ok(stream) => self.handle_connection(stream),
             }
         }
+        Ok(())
     }
 
     /**
@@ -65,7 +66,7 @@ impl Immortal {
                         continue;
                     },
                     _ => {
-                        println!("{:?}", e);
+                        println!("{}", e);
                         break;
                     },
                 },
