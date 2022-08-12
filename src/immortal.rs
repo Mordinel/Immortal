@@ -38,6 +38,9 @@ impl Immortal {
         })
     }
 
+    /**
+     * Listens for incoming connections and sends them to handle_connection
+     */
     pub fn listen(&self) {
         for stream in self.listener.incoming() {
             match stream {
@@ -47,6 +50,9 @@ impl Immortal {
         }
     }
 
+    /**
+     * Reads the TcpStream and handles errors while reading
+     */
     fn handle_connection(&self, mut stream: TcpStream) {
         let mut buf: [u8; 4096] = [0; 4096];
         loop {
