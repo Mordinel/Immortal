@@ -41,7 +41,10 @@ impl Request {
             Err(e) => return Err(e),
             Ok(tuple) => tuple,
         };
-        println!("{}\n\n{}", String::from_utf8_lossy(request_head), String::from_utf8_lossy(request_body.unwrap()));
+        match request_body {
+            None => println!("{}", String::from_utf8_lossy(request_head)),
+            Some(body) => println!("{}\n\n{}", String::from_utf8_lossy(request_head), String::from_utf8_lossy(body)),
+        };
         Err("Not implemented".to_string())
     }
 }
