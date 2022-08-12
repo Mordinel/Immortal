@@ -15,8 +15,8 @@
 *     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+use crate::immortal::Immortal;
 mod immortal;
-use immortal::Immortal;
 
 fn main() {
     let socket_str = "127.0.0.1:7777";

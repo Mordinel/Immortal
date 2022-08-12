@@ -17,7 +17,8 @@
 
 use std::net::{TcpListener, TcpStream};
 use std::io::{Read, ErrorKind};
-use crate::immortal::Request;
+use crate::immortal::request::Request;
+mod request;
 
 #[derive(Debug)]
 pub struct Immortal {
@@ -74,7 +75,7 @@ impl Immortal {
             match read_sz {
                 0 => break,
                 _ => {
-                    let request = match immortal::Request::new(&buf) {
+                    let _request = match Request::new(&mut buf) {
                         Err(_) => break,
                         Ok(req) => req,
                     };
