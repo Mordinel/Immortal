@@ -41,7 +41,7 @@ impl Request {
             Err(e) => return Err(e),
             Ok(tuple) => tuple,
         };
-        println!("{}\n\n{}", String::from_utf8_lossy(&request_head), String::from_utf8_lossy(&request_body.unwrap()));
+        println!("{}\n\n{}", String::from_utf8_lossy(request_head), String::from_utf8_lossy(request_body.unwrap()));
         Err("Not implemented".to_string())
     }
 }
@@ -60,14 +60,14 @@ fn request_head_body_split(haystack: &mut [u8]) -> Result<(&mut [u8], Option<&mu
         if crlf_count == 2 { // exit case where crlf_start_index can be not zero
             break;
         }
-        if *byte == ('\r' as u8) {
+        if *byte == b'\r' {
             if crlf_count == 0 { // record the crlf start index only on the first crlf
                 crlf_start_idx = idx;
             }
             found_cr = true;
             continue;
         }
-        if found_cr && *byte == ('\n' as u8) {
+        if found_cr && *byte == b'\n' {
             crlf_count += 1;
             found_cr = false;
             continue;

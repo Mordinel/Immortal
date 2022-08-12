@@ -36,7 +36,7 @@ impl Immortal {
         };
        
         Ok(Self {
-            listener: listener,
+            listener,
         })
     }
 
@@ -75,7 +75,7 @@ impl Immortal {
             match read_sz {
                 0 => break,
                 _ => {
-                    let _request = match Request::new(&mut buf) {
+                    let request = match Request::new(&mut buf) {
                         Err(_) => break,
                         Ok(req) => req,
                     };
