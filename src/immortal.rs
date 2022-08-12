@@ -17,6 +17,7 @@
 
 use std::net::{TcpListener, TcpStream};
 use std::io::{Read, ErrorKind};
+use crate::immortal::Request;
 
 #[derive(Debug)]
 pub struct Immortal {
@@ -56,7 +57,7 @@ impl Immortal {
     fn handle_connection(&self, mut stream: TcpStream) {
         let mut buf: [u8; 4096] = [0; 4096];
         loop {
-            buf.iter_mut().for_each(|b| *b = 0);
+            buf.fill(0u8);
             let read_sz = match stream.read(&mut buf) {
                 Err(e) => match e.kind() {
                     ErrorKind::Interrupted => {
@@ -72,7 +73,12 @@ impl Immortal {
 
             match read_sz {
                 0 => break,
-                _ => println!("{}", String::from_utf8_lossy(&buf)),
+                _ => {
+                    let request = match immortal::Request::new(&buf) {
+                        Err(_) => break,
+                        Ok(req) => req,
+                    };
+                },
             };
         };
     }
