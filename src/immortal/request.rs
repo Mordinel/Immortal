@@ -16,11 +16,12 @@
 */
 
 use std::str;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Request {
     pub body: Vec<u8>,
-    headers_raw: Vec<String>,
+    headers: HashMap<String, String>,
     pub method: String,
     pub document: String,
     pub query: String,
@@ -109,17 +110,17 @@ impl Request {
             return Err("Invalid version in proto string".to_string());
         }
 
-        let headers_raw = match split_by_into_utf8_string(match request_headers {
+        let headers = match parse_headers(match request_headers {
             None => b"",
             Some(thing) => thing,
-        }, b"\r\n") {
-            Err(_) => vec![],
+        }) {
+            Err(e) => return Err(format!("Invalid header string: {}", e)),
             Ok(h) => h,
         };
 
         Ok(Self {
             body,
-            headers_raw,
+            headers,
             method,
             document,
             query,
@@ -130,34 +131,66 @@ impl Request {
 }
 
 /**
- * Accept two slices of bytes, parse these into utf8 strings and then split the first slice
- * delimited by the second slice, returns a vector of String.
+ * Accepts a slice containing unparsed headers straight from the request recieve buffer, split and
+ * parse these into a hashmap of key-value pairs where keys have all ascii values as uppercase.
  */
-fn split_by_into_utf8_string(to_split: &[u8], by: &[u8]) -> Result<Vec<String>, String> {
+fn parse_headers(to_split: &[u8]) -> Result<HashMap<String, String>, String> {
     let to_split = match str::from_utf8(to_split) {
-        Err(e) => return Err(format!("Invalid header string: {}", e)),
+        Err(e) => return Err(format!("{}", e)),
         Ok(s) => s.trim_end_matches(|c| c == '\0'), // could be the rest of the recv buffer if
                                                     // we're not careful
     };
 
-    let by = match str::from_utf8(by) {
-        Err(e) => return Err(format!("Invalid split string: {}", e)),
-        Ok(b) => b,
-    };
-
     if to_split.is_empty() {
-        return Ok(vec![]);
+        return Ok(HashMap::new());
     }
 
-    let headers: Vec<String> = to_split
-        .split(&by)
-        .map(|s| s.to_string())
+    // split by crlf
+    let headers_vec: Vec<&str> = to_split
+        .split(&"\r\n")
         .collect();
-    if headers.is_empty() {
-        return Ok(vec![]);
+
+    let mut headers = HashMap::new();
+    for raw_header in headers_vec {
+        let header_items: Vec<&str> = raw_header
+            .split(&": ")
+            .collect();
+
+        // checking for valid header format
+        if header_items.len() < 2 { continue; }
+        if !is_header_key_valid(header_items[0]) { continue; }
+        let header_key = header_items[0]
+            .to_ascii_uppercase();
+
+        let header_value = if header_items.len() > 2 {
+            header_items.join(": ")
+        } else {
+            header_items[1].to_string()
+        };
+        headers.insert(header_key, header_value);
     }
 
     Ok(headers)
+}
+
+/**
+ * Accepts a string which is assumed to be a header name.
+ * Returns true if it is valid, valse if it is not valid.
+ */
+fn is_header_key_valid(key: &str) -> bool {
+    for (idx, chr) in key.chars().enumerate() {
+        if idx == 0 {
+            if let '0'..='9' = chr { return false }
+        }
+        match chr {
+            'a'..='z' => continue,
+            'A'..='Z' => continue,
+            '-' => continue,
+            '_' => continue,
+            _ => return false,
+        }
+    }
+    true
 }
 
 /**
