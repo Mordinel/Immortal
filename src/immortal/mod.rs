@@ -65,7 +65,7 @@ impl Immortal {
                     ErrorKind::Interrupted => {
                         continue;
                     },
-                    _ => {
+                    _ => { // other errors
                         println!("{}", e);
                         break;
                     },
@@ -77,9 +77,13 @@ impl Immortal {
                 0 => break,
                 _ => {
                     let request = match Request::new(&mut buf) {
-                        Err(_) => break,
+                        Err(e) => {
+                            println!("{:?}", e);
+                            break;
+                        },
                         Ok(req) => req,
                     };
+                    println!("{:?}", request);
                 },
             };
         };
