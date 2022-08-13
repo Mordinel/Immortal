@@ -19,13 +19,13 @@ use std::str;
 
 #[derive(Debug)]
 pub struct Request {
-    body: Vec<u8>,
-    method: String,
-    document: String,
-    query: String,
-    protocol: String,
-    version: String,
-    //headers: Vec<&mut [u8]>,
+    pub body: Vec<u8>,
+    headers_raw: Vec<String>,
+    pub method: String,
+    pub document: String,
+    pub query: String,
+    pub protocol: String,
+    pub version: String,
     
     //Future header fields to be parsed
     //host: String
@@ -109,8 +109,17 @@ impl Request {
             return Err("Invalid version in proto string".to_string());
         }
 
+        let headers_raw = match split_by_into_utf8_string(match request_headers {
+            None => b"",
+            Some(thing) => thing,
+        }, b"\r\n") {
+            Err(_) => vec![],
+            Ok(h) => h,
+        };
+
         Ok(Self {
             body,
+            headers_raw,
             method,
             document,
             query,
@@ -118,6 +127,37 @@ impl Request {
             version,
         })
     }
+}
+
+/**
+ * Accept two slices of bytes, parse these into utf8 strings and then split the first slice
+ * delimited by the second slice, returns a vector of String.
+ */
+fn split_by_into_utf8_string(to_split: &[u8], by: &[u8]) -> Result<Vec<String>, String> {
+    let to_split = match str::from_utf8(to_split) {
+        Err(e) => return Err(format!("Invalid header string: {}", e)),
+        Ok(s) => s.trim_end_matches(|c| c == '\0'), // could be the rest of the recv buffer if
+                                                    // we're not careful
+    };
+
+    let by = match str::from_utf8(by) {
+        Err(e) => return Err(format!("Invalid split string: {}", e)),
+        Ok(b) => b,
+    };
+
+    if to_split.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let headers: Vec<String> = to_split
+        .split(&by)
+        .map(|s| s.to_string())
+        .collect();
+    if headers.is_empty() {
+        return Ok(vec![]);
+    }
+
+    Ok(headers)
 }
 
 /**
