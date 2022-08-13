@@ -19,11 +19,12 @@ use std::str;
 
 #[derive(Debug)]
 pub struct Request {
+    body: Vec<u8>,
     method: String,
     document: String,
     query: String,
-    //protocol: &mut [u8],
-    //version: &mut [u8],
+    protocol: String,
+    version: String,
     //headers: Vec<&mut [u8]>,
     
     //Future header fields to be parsed
@@ -41,31 +42,34 @@ impl Request {
      * Construct a new request object, parsing the request buffer
      */
     pub fn new(buf: &mut [u8]) -> Result<Self, String> {
-        let (mut request_head, mut request_body) = match request_head_body_split(buf) {
+        let (request_head, request_body) = match request_head_body_split(buf) {
+            Err(e) => return Err(e),
+            Ok(tuple) => tuple,
+        };
+        let body = match request_body {
+            None => vec![],
+            Some(thing) => thing.to_vec(),
+        };
+
+        let (request_line, request_headers) = match request_line_header_split(request_head) {
             Err(e) => return Err(e),
             Ok(tuple) => tuple,
         };
 
-        let (mut request_line, mut request_headers) = match request_line_header_split(buf) {
-            Err(e) => return Err(e),
-            Ok(tuple) => tuple,
-        };
-
-        let mut request_line_items: [&mut [u8]; 3] = match request_line
-            .split_mut(|c| *c == b' ')
-            .collect::<Vec<&mut [u8]>>()
+        let request_line_items: [&[u8]; 3] = match request_line
+            .split(|c| *c == b' ')
+            .collect::<Vec<&[u8]>>()
             .try_into() {
-                Err(e) => return Err("Invalid request line".to_string()),
+                Err(_) => return Err("Invalid request line".to_string()),
                 Ok(items) => items,
         };
 
-        request_line_items[0].make_ascii_uppercase();
-        let method = match str::from_utf8(request_line_items[0]) {
+        let method = match str::from_utf8(&request_line_items[0].to_ascii_uppercase()) {
             Err(e) => return Err(format!("Invalid method string: {}", e)),
             Ok(m) => m.to_string(),
         };
 
-        let (mut document, mut query) = match split_once(request_line_items[1], b'?') {
+        let (document, query) = match split_once(request_line_items[1], b'?') {
             Err(e) => return Err(e),
             Ok(tuple) => tuple,
         };
@@ -80,11 +84,38 @@ impl Request {
                 Ok(q) => q.to_string(),
             },
         };
+        
+        let proto_version_items: [&[u8]; 2] = match request_line_items[2]
+            .split(|c| *c == b'/')
+            .collect::<Vec<&[u8]>>()
+            .try_into() {
+                Err(_) => return Err("Invalid proto string".to_string()),
+                Ok(items) => items,
+        };
+        let protocol = match str::from_utf8(proto_version_items[0]) {
+            Err(e) => return Err(format!("Invalid protocol string: {}", e)),
+            Ok(p) => p.to_string(),
+        };
+        if protocol != "HTTP" {
+            return Err("Invalid protocol in proto string".to_string());
+        }
+
+        let version = match str::from_utf8(proto_version_items[1]) {
+            Err(e) => return Err(format!("Invalid version string: {}", e)),
+            Ok(v) => v.trim_end_matches(|c| c == '\0' || c == '\r' || c == '\n').to_string(),
+        };
+
+        if version != "1.1" {
+            return Err("Invalid version in proto string".to_string());
+        }
 
         Ok(Self {
-            method: method,
-            document: document,
-            query: query,
+            body,
+            method,
+            document,
+            query,
+            protocol,
+            version,
         })
     }
 }
@@ -96,7 +127,7 @@ impl Request {
  *
  * This exists because there is no split_once in a mutable slice, only for strings
  */
-fn split_once(to_split: &mut [u8], by: u8) -> Result<(&mut [u8], Option<&mut [u8]>), String> {
+fn split_once(to_split: &[u8], by: u8) -> Result<(&[u8], Option<&[u8]>), String> {
     let mut found_idx = 0;
 
     for (idx, byte) in to_split.iter().enumerate() {
@@ -110,8 +141,8 @@ fn split_once(to_split: &mut [u8], by: u8) -> Result<(&mut [u8], Option<&mut [u8
         return Ok((to_split, None));
     }
 
-    let (item, mut rest) = to_split.split_at_mut(found_idx);
-    rest = rest.split_at_mut(1).1;
+    let (item, rest) = to_split.split_at(found_idx);
+    let rest = rest.split_at(1).1;
     Ok((item, Some(rest)))
 }
 
@@ -120,7 +151,7 @@ fn split_once(to_split: &mut [u8], by: u8) -> Result<(&mut [u8], Option<&mut [u8
  * being the buffer slice up to the crlf, and the second being the slice content after the
  * clrf
  */
-fn request_line_header_split(to_split: &mut [u8]) -> Result<(&mut [u8], Option<&mut [u8]>), String> {
+fn request_line_header_split(to_split: &[u8]) -> Result<(&[u8], Option<&[u8]>), String> {
     let mut found_cr = false;
     let mut crlf_start_idx = 0;
 
@@ -138,11 +169,15 @@ fn request_line_header_split(to_split: &mut [u8]) -> Result<(&mut [u8], Option<&
     }
 
     if crlf_start_idx == 0 {
-        return Ok((to_split, None));
+        let line_cleaned = match to_split.strip_suffix(&[b'\r', b'\n']) {
+            None => return Ok((to_split, None)),
+            Some(thing) => thing,
+        };
+        return Ok((line_cleaned, None));
     }
 
-    let (req_line, mut req_headers) = to_split.split_at_mut(crlf_start_idx);
-    req_headers = req_headers.split_at_mut(2).1;
+    let (req_line, req_headers) = to_split.split_at(crlf_start_idx);
+    let req_headers = req_headers.split_at(2).1;
     Ok((req_line, Some(req_headers)))
 }
 
@@ -151,7 +186,7 @@ fn request_line_header_split(to_split: &mut [u8]) -> Result<(&mut [u8], Option<&
  * first being the slice content up to the double crlf, and the second being being the slice 
  * content after the double clrf
  */
-fn request_head_body_split(to_split: &mut [u8]) -> Result<(&mut [u8], Option<&mut [u8]>), String>  {
+fn request_head_body_split(to_split: &[u8]) -> Result<(&[u8], Option<&[u8]>), String>  {
     let mut found_cr = false;
     let mut crlf_count = 0;
     let mut crlf_start_idx = 0;
@@ -181,8 +216,8 @@ fn request_head_body_split(to_split: &mut [u8]) -> Result<(&mut [u8], Option<&mu
         return Ok((to_split, None));
     }
 
-    let (head, mut body) = to_split.split_at_mut(crlf_start_idx);
-    body = body.split_at_mut(4).1;
+    let (head, body) = to_split.split_at(crlf_start_idx);
+    let body = body.split_at(4).1;
     Ok((head, Some(body)))
 }
 
