@@ -102,7 +102,7 @@ impl Request {
 
         let version = match str::from_utf8(proto_version_items[1]) {
             Err(e) => return Err(format!("Invalid version string: {}", e)),
-            Ok(v) => v.trim_end_matches(|c| c == '\0' || c == '\r' || c == '\n').to_string(),
+            Ok(v) => v.trim_end_matches(|c| c == '\r' || c == '\n' || c == '\0').to_string(),
         };
 
         if version != "1.1" {
