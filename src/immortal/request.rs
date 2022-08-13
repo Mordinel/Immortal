@@ -21,21 +21,19 @@ use std::collections::HashMap;
 #[derive(Debug)]
 pub struct Request {
     pub body: Vec<u8>,
-    pub headers: HashMap<String, String>,
     pub method: String,
     pub document: String,
     pub query: String,
     pub protocol: String,
     pub version: String,
+    pub headers: HashMap<String, String>,
     
-    //Future header fields to be parsed
-    //host: String
-    //user_agent: String,
-    //connection: String,
-    //content_type: String,
-    //content_length: String,
-    //cookies_raw: String,
-    //keep_alive: bool,
+    pub host: String,
+    pub user_agent: String,
+    pub connection: String,
+    pub content_type: String,
+    pub content_length: usize,
+    pub keep_alive: bool,
 }
 
 impl Request {
@@ -127,15 +125,41 @@ impl Request {
             Ok(h) => h,
         };
 
+        // collect common headers from the `headers` HashMap
+        let host = collect_header(&headers, "Host");
+        let user_agent = collect_header(&headers, "User-Agent");
+        let connection = collect_header(&headers, "Connection");
+        let content_type = collect_header(&headers, "Content-Type");
+        let content_length = collect_header(&headers, "Content-Length");
+
+        // parse keep-alive status as bool
+        let keep_alive = connection == "keep-alive";
+
+        // parse `content_length` else return the index of the first null char in the body
+        let content_length = match content_length.parse::<usize>() {
+            Err(_) => body
+                .iter()
+                .take_while(|c| **c != b'\0')
+                .collect::<Vec<&u8>>()
+                .len(),
+            Ok(l) => l,
+        };
+
         // emit a complete Request object
         Ok(Self {
             body,
-            headers,
             method,
             document,
             query,
             protocol,
             version,
+            headers,
+            host,
+            user_agent,
+            connection,
+            content_type,
+            content_length,
+            keep_alive,
         })
     }
 
@@ -161,6 +185,18 @@ impl Request {
             self.headers.insert(key, String::new());
             return Some(self.headers.get_mut(&key_copy).unwrap());
         }
+    }
+}
+
+/**
+ * Accepts a hashmap and a key, returns the key value or an empty string
+ * [[[ASSUMES `key` IS A VALID NON EMPTY HEADER KEY]]]: handling errors from this will be annoying.
+ */
+fn collect_header(headers: &HashMap<String, String>, key: &str) -> String {
+    let key = key.to_ascii_uppercase();
+    match headers.get(&key) {
+        None => String::new(),
+        Some(thing) => thing.to_string(),
     }
 }
 
