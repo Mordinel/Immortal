@@ -44,6 +44,11 @@ impl Immortal {
      * Listens for incoming connections and sends them to handle_connection
      */
     pub fn listen(&self) -> Result<(), String> {
+        match self.listener.local_addr() {
+            Err(e) => return Err(e.to_string()),
+            Ok(socket) => println!("Server starting at: http://{}", socket),
+        };
+
         for stream in self.listener.incoming() {
             match stream {
                 Err(e) => return Err(e.to_string()),
