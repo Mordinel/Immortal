@@ -88,7 +88,14 @@ impl Immortal {
                         },
                         Ok(req) => req,
                     };
-                    println!("{:?}", request);
+                    println!("");
+                    println!("  METHOD: {:?}", request.method);
+                    println!("DOCUMENT: {:?}", request.document);
+                    println!("   QUERY: {:?}", request.query);
+                    println!("PROTOCOL: {:?}", request.protocol);
+                    println!(" VERSION: {:?}", request.version);
+                    println!(" HEADERS: {:?}", request.headers);
+                    println!("     GET: {:?}", request.get);
                 },
             };
         };

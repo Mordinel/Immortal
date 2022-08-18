@@ -27,6 +27,7 @@ pub struct Request {
     pub protocol: String,
     pub version: String,
     pub headers: HashMap<String, String>,
+    pub get: HashMap<String, String>,
     
     pub host: String,
     pub user_agent: String,
@@ -144,6 +145,11 @@ impl Request {
             Ok(l) => l,
         };
 
+        let get = match parse_parameters(&query) {
+            Err(_) => HashMap::new(),
+            Ok(g) => g,
+        };
+
         // emit a complete Request object
         Ok(Self {
             body,
@@ -153,6 +159,7 @@ impl Request {
             protocol,
             version,
             headers,
+            get,
             host,
             user_agent,
             connection,
@@ -174,7 +181,7 @@ impl Request {
      *      self.header("Content-Type").unwrap() = "application/x-www-form-urlencoded";
      */
     pub fn header(&mut self, key: &str) -> Option<&mut str> {
-        if key.is_empty() || !is_header_key_valid(key) { return None }
+        if key.is_empty() || !is_param_name_valid(key) { return None }
         let key = key.to_ascii_uppercase();
         let key_copy = key.to_string();
 
@@ -197,6 +204,141 @@ fn collect_header(headers: &HashMap<String, String>, key: &str) -> String {
         None => String::new(),
         Some(thing) => thing.to_string(),
     }
+}
+
+// TODO MAKE UTIL FILE
+/**
+ * Accept a byte encoding a hex value and decompose it into its decimal form
+ */
+fn from_hex(byte: u8) -> Option<u8> {
+    match byte {
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        b'0'..=b'9' => Some(byte - b'0'),
+        _ => None,
+    }
+}
+
+/**
+ * Accept a string, perform URL decoding on the string and return the result
+ */
+fn url_decode(to_decode: &str) -> Result<String, String> {
+    let mut build: Vec<u8> = Vec::with_capacity(to_decode.len());
+    let mut bytes = to_decode.bytes();
+    while let Some(c) = bytes.next() {
+        match c {
+            b'%' => { // if % is found, take the next 2 characters and try to hex-decoe them
+                match bytes.next() {
+                    None => build.push(b'%'),
+                    Some(top) => match from_hex(top) {
+                        None => {
+                            build.push(b'%');
+                            build.push(top);
+                        },
+                        Some(t) => match bytes.next() {
+                            None => {
+                                build.push(b'%');
+                                build.push(top);
+                            },
+                            Some(bottom) => match from_hex(bottom) {
+                                None => { // fail, emit as-is
+                                    build.push(b'%');
+                                    build.push(top);
+                                    build.push(bottom);
+                                },
+                                Some(b) => {
+                                    // pack the top and bottom half of the byte then add it
+                                    build.push((t << 4) | b);
+                                },
+                            },
+                        },
+                    },
+                };
+            },
+            other => build.push(other),
+        }
+    }
+
+    // validate if is still utf8
+    match String::from_utf8(build) {
+        Err(e) => Err(format!("{}", e)),
+        Ok(decoded) => Ok(decoded),
+    }
+}
+
+fn parse_parameters(to_parse: &str) -> Result<HashMap<String, String>, String> {
+    if to_parse.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    enum ParseState {
+        NAME,
+        VALUE,
+    }
+    let mut state = ParseState::NAME;
+
+    let mut params = HashMap::new();
+    let mut name = String::new();
+    let mut value = String::new();
+    let mut builder = String::new();
+
+    // perform state machine parsing on the query string
+    for c in to_parse.chars() {
+        match c {
+            // transition to value parsing
+            '=' => {
+                if state == ParseState::VALUE {
+                    builder.push(c);
+                    continue;
+                }
+                name = builder.clone();
+                if name.is_empty() {
+                    name = String::new();
+                } else {
+                    builder = String::new();
+                    state = ParseState::VALUE;
+                }
+            },
+            // transition to name parsing
+            '&' => {
+                if !name.is_empty() {
+                    value = builder;
+                    if value.is_empty() {
+                        builder = String::new();
+                    } else {
+                        builder = String::new();
+                        if is_param_name_valid(&name) {
+                            value = match url_decode(&value) {
+                                Err(_) => continue,
+                                Ok(v) => v,
+                            };
+                            params.insert(name.clone(), value.clone());
+                        }
+                        state = ParseState::NAME;
+                    }
+                }
+            },
+            _ => {
+                builder.push(c);
+            },
+        };
+    }
+
+    if state == ParseState::VALUE && !name.is_empty() {
+        value = builder;
+        if !value.is_empty() {
+            if is_param_name_valid(&name) {
+                value = match url_decode(&value) {
+                    Err(_) => return Ok(params),
+                    Ok(v) => v,
+                };
+                params.insert(name.clone(), value.clone());
+            }
+        }
+    }
+
+    Ok(params)
 }
 
 /**
@@ -226,9 +368,9 @@ fn parse_headers(to_parse: &[u8]) -> Result<HashMap<String, String>, String> {
             None => continue,
             Some(thing) => {
                 // if the header value is empty or the header is invalid, skip the header
-                // is_empty is faster O(1) than is_header_key_valid O(n),
+                // is_empty is faster O(1) than is_param_name_valid O(n),
                 //  so short circuit the is_empty call first
-                if thing.1.is_empty() || !is_header_key_valid(thing.0) {
+                if thing.1.is_empty() || !is_param_name_valid(thing.0) {
                     continue;
                 } else {
                     // gets the strings as copies, makes the key uppercase for case insensitivity
@@ -244,13 +386,13 @@ fn parse_headers(to_parse: &[u8]) -> Result<HashMap<String, String>, String> {
 }
 
 /**
- * Accepts a string which is assumed to be a header name.
+ * Accepts a string which is assumed to be a param name.
  * Returns true if it's valid, valse if it's not valid.
  */
-fn is_header_key_valid(key: &str) -> bool {
-    if key.is_empty() { return false }
+fn is_param_name_valid(param: &str) -> bool {
+    if param.is_empty() { return false }
 
-    for (idx, chr) in key.chars().enumerate() {
+    for (idx, chr) in param.chars().enumerate() {
         if idx == 0 { // first char can't be a number
             if let '0'..='9' = chr { return false }
         }
