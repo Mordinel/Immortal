@@ -206,7 +206,6 @@ fn collect_header(headers: &HashMap<String, String>, key: &str) -> String {
     }
 }
 
-// TODO MAKE UTIL FILE
 /**
  * Accept a byte encoding a hex value and decompose it into its decimal form
  */
@@ -273,14 +272,14 @@ fn parse_parameters(to_parse: &str) -> Result<HashMap<String, String>, String> {
 
     #[derive(Debug, PartialEq, Eq)]
     enum ParseState {
-        NAME,
-        VALUE,
+        Name,
+        Value,
     }
-    let mut state = ParseState::NAME;
+    let mut state = ParseState::Name;
 
     let mut params = HashMap::new();
     let mut name = String::new();
-    let mut value = String::new();
+    let mut value;
     let mut builder = String::new();
 
     // perform state machine parsing on the query string
@@ -288,7 +287,7 @@ fn parse_parameters(to_parse: &str) -> Result<HashMap<String, String>, String> {
         match c {
             // transition to value parsing
             '=' => {
-                if state == ParseState::VALUE {
+                if state == ParseState::Value {
                     builder.push(c);
                     continue;
                 }
@@ -297,7 +296,7 @@ fn parse_parameters(to_parse: &str) -> Result<HashMap<String, String>, String> {
                     name = String::new();
                 } else {
                     builder = String::new();
-                    state = ParseState::VALUE;
+                    state = ParseState::Value;
                 }
             },
             // transition to name parsing
@@ -315,7 +314,7 @@ fn parse_parameters(to_parse: &str) -> Result<HashMap<String, String>, String> {
                             };
                             params.insert(name.clone(), value.clone());
                         }
-                        state = ParseState::NAME;
+                        state = ParseState::Name;
                     }
                 }
             },
@@ -325,16 +324,14 @@ fn parse_parameters(to_parse: &str) -> Result<HashMap<String, String>, String> {
         };
     }
 
-    if state == ParseState::VALUE && !name.is_empty() {
+    if state == ParseState::Value && !name.is_empty() {
         value = builder;
-        if !value.is_empty() {
-            if is_param_name_valid(&name) {
-                value = match url_decode(&value) {
-                    Err(_) => return Ok(params),
-                    Ok(v) => v,
-                };
-                params.insert(name.clone(), value.clone());
-            }
+        if !value.is_empty() && is_param_name_valid(&name) {
+            value = match url_decode(&value) {
+                Err(_) => return Ok(params),
+                Ok(v) => v,
+            };
+            params.insert(name, value);
         }
     }
 
