@@ -16,8 +16,11 @@
 */
 
 use std::net::{TcpListener, TcpStream};
-use std::io::{Read, ErrorKind};
+use std::io::{Read, Write, ErrorKind};
+
 use crate::immortal::request::Request;
+use crate::immortal::response::Response;
+mod response;
 mod request;
 
 #[derive(Debug)]
@@ -82,9 +85,18 @@ impl Immortal {
                 0 => break,
                 _ => {
                     let request = match Request::new(&mut buf) {
-                        Err(e) => {
-                            println!("{:?}", e);
-                            break;
+                        Err(_) => {
+                            let mut response = Response::bad();
+                            match stream.write(response.serialize().as_slice()) {
+                                Err(e) => match e.kind() {
+                                    ErrorKind::Interrupted => continue,
+                                    _ => {
+                                        println!("{}", e);
+                                        break;
+                                    },
+                                },
+                                Ok(_) => break,
+                            }
                         },
                         Ok(req) => req,
                     };
@@ -96,6 +108,17 @@ impl Immortal {
                     println!(" VERSION: {:?}", request.version);
                     println!(" HEADERS: {:?}", request.headers);
                     println!("     GET: {:?}", request.get);
+
+                    let mut response = Response::new(&request);
+                    if let Err(e) = stream.write(response.serialize().as_slice()) {
+                        if e.kind() == ErrorKind::Interrupted { continue }
+                    };
+
+                    if request.keep_alive {
+                        continue;
+                    } else {
+                        break;
+                    }
                 },
             };
         };

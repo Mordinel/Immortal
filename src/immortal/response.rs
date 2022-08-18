@@ -1,0 +1,141 @@
+/**
+*     Copyright (C) 2022 Mason Soroka-Gill
+*
+*     This program is free software: you can redistribute it and/or modify
+*     it under the terms of the GNU General Public License as published by
+*     the Free Software Foundation, either version 3 of the License, or
+*     (at your option) any later version.
+*
+*     This program is distributed in the hope that it will be useful,
+*     but WITHOUT ANY WARRANTY; without even the implied warranty of
+*     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*     GNU General Public License for more details.
+*
+*     You should have received a copy of the GNU General Public License
+*     along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+use std::collections::HashMap;
+use chrono::{DateTime, Utc};
+
+use crate::immortal::Request;
+
+#[derive(Debug)]
+pub struct Response {
+    pub body: Vec<u8>,
+    pub code: String,
+    pub status: String,
+    pub protocol: String,
+    pub method: String,
+    pub headers: HashMap<String, String>,
+    // pub cookies: Vec<Cookie>,
+}
+
+impl Response {
+    /**
+     *  Constructs a default response based on the passed request.
+     */
+    pub fn new(req: &Request) -> Self {
+        let mut headers: HashMap<String, String> = HashMap::new();
+        let now: DateTime<Utc> = Utc::now();
+
+        // default headers
+        headers.insert("Date".to_string(), now.format("%a, %d %b %Y %H:%M:%S").to_string());
+        headers.insert("Connection".to_string(), match req.keep_alive {
+            true => "keep-alive".to_string(),
+            false => "close".to_string(),
+        });
+        headers.insert("Content-Type".to_string(), "text/html".to_string());
+
+        Self {
+            body: vec![],
+            code: "200".to_string(),
+            status: "OK".to_string(),
+            protocol: "HTTP/1.1".to_string(),
+            method: req.method.clone(),
+            headers,
+        }
+    }
+
+    /**
+     * Constructs a default error response
+     */
+    pub fn bad() -> Self {
+        let mut headers: HashMap<String, String> = HashMap::new();
+        let now: DateTime<Utc> = Utc::now();
+
+        // default headers
+        headers.insert("Date".to_string(), now.format("%a, %d %b %Y %H:%M:%S").to_string());
+        headers.insert("Connection".to_string(),  "close".to_string());
+        headers.insert("Content-Type".to_string(), "text/html".to_string());
+
+        Self {
+            body: vec![],
+            code: "400".to_string(),
+            status: "BAD REQUEST".to_string(),
+            protocol: "HTTP/1.1".to_string(),
+            method: "GET".to_string(),
+            headers,
+        }
+    }
+
+    /**
+     * Generates the serial data for an HTTP response using the object internal state
+     */
+    pub fn serialize(&mut self) -> Vec<u8> {
+        let mut serialized = vec![];
+        let statuses: HashMap<String, String> = HashMap::from([ // TODO: Make this static
+            ( "200".to_string(), "OK".to_string() ),
+            ( "301".to_string(), "MOVED PERMANENTLY".to_string() ),
+            ( "302".to_string(), "FOUND".to_string() ),
+            ( "308".to_string(), "PERMANENT REDIRECT".to_string() ),
+            ( "400".to_string(), "BAD REQUEST".to_string() ),
+            ( "401".to_string(), "UNAUTHORIZED".to_string() ),
+            ( "403".to_string(), "FORBIDDEN".to_string() ),
+            ( "404".to_string(), "NOT FOUND".to_string() ),
+            ( "411".to_string(), "LENGTH REQUIRED".to_string() ),
+            ( "413".to_string(), "PAYLOAD TOO LARGE".to_string() ),
+            ( "414".to_string(), "URI TOO LONG".to_string() ),
+            ( "418".to_string(), "I AM A TEAPOT".to_string() ),
+            ( "426".to_string(), "UPGRADE REQUIRED".to_string() ),
+            ( "451".to_string(), "UNAVAILABLE FOR LEGAL REASONS".to_string() ),
+            ( "500".to_string(), "INTERNAL SERVER ERROR".to_string() ),
+            ( "501".to_string(), "NOT IMPLEMENTED".to_string() ),
+        ]);
+
+        let mut status: String = match statuses.get(&self.code) {
+            None => self.status.clone(),
+            Some(thing) => thing.to_string(),
+        };
+
+        if status.is_empty() {
+            self.code = "500".to_string();
+            status = match statuses.get(&self.code) {
+                None => "INTERNAL SERVER ERROR".to_string(),
+                Some(thing) => thing.to_string(),
+            };
+            self.headers.insert("Content-Type".to_string(), "text/html".to_string());
+            self.body = format!("<h1>500: {}</h1>", status).into_bytes();
+        }
+
+        // emit the status line
+        serialized.append(&mut format!("{} {} {}\r\n", &self.protocol, &self.code, &status).into_bytes());
+
+        // emit headers
+        for (key, value) in self.headers.iter() {
+            if !key.is_empty() {
+                serialized.append(&mut format!("{}: {}\r\n", &key, &value).into_bytes());
+            }
+        }
+
+        // output content or not depending on the request method
+        if self.method != "HEAD" {
+            serialized.append(&mut format!("Content-Length: {}\r\n\r\n", &self.body.len()).into_bytes());
+            serialized.append(&mut self.body);
+        } else {
+            serialized.append(&mut "Content-Length: 0\r\n\r\n".to_string().into_bytes());
+        }
+
+        serialized
+    }
+}
