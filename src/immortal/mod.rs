@@ -22,6 +22,7 @@ use crate::immortal::request::Request;
 use crate::immortal::response::Response;
 mod response;
 mod request;
+mod util;
 
 #[derive(Debug)]
 pub struct Immortal {
