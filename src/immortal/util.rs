@@ -77,6 +77,9 @@ pub fn url_decode(to_decode: &str) -> Result<String, String> {
     }
 }
 
+/**
+ * Parses an HTTP query string into a key-value hashmap
+ */
 pub fn parse_parameters(to_parse: &str) -> Result<HashMap<String, String>, String> {
     if to_parse.is_empty() {
         return Ok(HashMap::new());
