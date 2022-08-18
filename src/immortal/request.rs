@@ -140,8 +140,7 @@ impl Request {
             Err(_) => body
                 .iter()
                 .take_while(|c| **c != b'\0')
-                .collect::<Vec<&u8>>()
-                .len(),
+                .count(),
             Ok(l) => l,
         };
 
