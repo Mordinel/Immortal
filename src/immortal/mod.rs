@@ -111,6 +111,9 @@ impl Immortal {
                     println!("     GET: {:?}", request.get);
 
                     let mut response = Response::new(&request);
+
+                    response.body.append(&mut b"<h1>Hello!</h1>".to_vec());
+
                     if let Err(e) = stream.write(response.serialize().as_slice()) {
                         if e.kind() == ErrorKind::Interrupted { continue }
                     };
