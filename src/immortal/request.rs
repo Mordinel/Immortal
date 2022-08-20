@@ -170,30 +170,6 @@ impl Request {
             keep_alive,
         })
     }
-
-    /**
-     * Accepts a string reference and looks it up in the `self.headers` hashmap
-     *  if the string is there, return a mutable reference to its value
-     *  if not, emplace an empty string into the hashmap and return it as a mutable reference
-     *
-     *  Should be used like the following:
-     *    Read:
-     *      let my = self.header("Content-Type").unwrap();
-     *    Write:
-     *      self.header("Content-Type").unwrap() = "application/x-www-form-urlencoded";
-     */
-    pub fn header(&mut self, key: &str) -> Option<&mut str> {
-        if key.is_empty() || !is_param_name_valid(key) { return None }
-        let key = key.to_ascii_uppercase();
-        let key_copy = key.to_string();
-
-        if self.headers.contains_key(&key_copy) {
-            return Some(self.headers.get_mut(&key_copy).unwrap());
-        } else {
-            self.headers.insert(key, String::new());
-            return Some(self.headers.get_mut(&key_copy).unwrap());
-        }
-    }
 }
 
 /**
