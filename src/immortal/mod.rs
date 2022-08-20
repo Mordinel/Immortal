@@ -18,11 +18,12 @@
 use std::net::{TcpListener, TcpStream};
 use std::io::{Read, Write, ErrorKind};
 
-use crate::immortal::request::Request;
-use crate::immortal::response::Response;
-mod response;
-mod request;
-mod util;
+pub use crate::immortal::request::Request;
+pub use crate::immortal::response::Response;
+
+pub mod response;
+pub mod request;
+pub mod util;
 
 #[derive(Debug)]
 pub struct Immortal {
