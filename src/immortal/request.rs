@@ -39,6 +39,47 @@ pub struct Request {
     pub keep_alive: bool,
 }
 
+impl PartialEq for Request {
+    fn eq(&self, other: &Self) -> bool {
+        if self.body != other.body { return false }
+        if self.method != other.method { return false }
+        if self.document != other.document { return false }
+        if self.query != other.query { return false }
+        if self.protocol != other.protocol { return false }
+        if self.version != other.version { return false }
+
+        if self.host != other.host { return false }
+        if self.user_agent != other.user_agent { return false }
+        if self.connection != other.connection { return false }
+        if self.content_type != other.content_type { return false }
+        if self.content_length != other.content_length { return false }
+        if self.keep_alive != other.keep_alive { return false }
+
+        if self.get.len() != other.get.len() { return false }
+        if self.headers.len() != other.headers.len() { return false }
+
+        for (key, value) in &self.get {
+            match other.get.get(key) {
+                None => return false,
+                Some(thing) => {
+                    if value != thing { return false }
+                },
+            }
+        }
+
+        for (key, value) in &self.headers {
+            match other.headers.get(key) {
+                None => return false,
+                Some(thing) => {
+                    if value != thing { return false }
+                },
+            }
+        }
+
+        true
+    }
+}
+
 impl Request {
     /**
      * Construct a new request object, parsing the request buffer
@@ -191,6 +232,7 @@ fn collect_header(headers: &HashMap<String, String>, key: &str) -> String {
  */
 fn request_line_header_split(to_split: &[u8]) -> Result<(&[u8], Option<&[u8]>), String> {
     let mut found_cr = false;
+    let mut found_lf = false;
     let mut crlf_start_idx = 0;
 
     // iterate over the slice and get the index of the first crlf
@@ -201,6 +243,7 @@ fn request_line_header_split(to_split: &[u8]) -> Result<(&[u8], Option<&[u8]>), 
             continue;
         }
         if found_cr && *byte == b'\n' {
+            found_lf = true;
             break;
         }
         crlf_start_idx = 0;
@@ -208,7 +251,7 @@ fn request_line_header_split(to_split: &[u8]) -> Result<(&[u8], Option<&[u8]>), 
     }
 
     // if no crlf was found or its at index 0, strip off crlf if possible and then return it
-    if crlf_start_idx == 0 {
+    if crlf_start_idx == 0 || !found_cr || !found_lf {
         let line_cleaned = match to_split.strip_suffix(&[b'\r', b'\n']) {
             None => return Ok((to_split, None)),
             Some(thing) => thing,
@@ -256,6 +299,11 @@ fn request_head_body_split(to_split: &[u8]) -> Result<(&[u8], Option<&[u8]>), St
 
     // if no double crlf was found or its index is at 0, return it
     if crlf_start_idx == 0 {
+        return Ok((to_split, None));
+    }
+
+    // if exited without fulfilling 2 crlf's, return it
+    if crlf_count != 2 {
         return Ok((to_split, None));
     }
 

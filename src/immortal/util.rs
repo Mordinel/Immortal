@@ -246,6 +246,10 @@ pub fn split_once(to_split: &[u8], by: u8) -> Result<(&[u8], Option<&[u8]>), Str
     // build the returned tuple excluding the matched `by` in the data
     let (item, rest) = to_split.split_at(found_idx);
     let rest = rest.split_at(1).1;
-    Ok((item, Some(rest)))
+    if rest == b"" {
+        Ok((item, None))
+    } else {
+        Ok((item, Some(rest)))
+    }
 }
 
