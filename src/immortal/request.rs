@@ -274,7 +274,7 @@ impl Request {
 fn get_cookies(cookies_raw: &str) -> HashMap<String, Cookie> {
     let mut cookies = HashMap::new();
 
-    let mut cookie_vec = parse_cookies(cookies_raw);
+    let cookie_vec = parse_cookies(cookies_raw);
     for cookie in cookie_vec {
         cookies.insert(String::from(&cookie.name), cookie);
     }

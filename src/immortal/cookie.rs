@@ -37,6 +37,12 @@ pub struct Cookie {
     pub max_age: i64,
 }
 
+impl Default for Cookie {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Cookie {
     pub fn new() -> Self {
         Self {
@@ -72,7 +78,7 @@ fn parse_cookies_state_transition(state: &mut ParseState, cookies: &mut Vec<Cook
             '=' => {
                 if *state == ParseState::Name {
                     *builder = builder.trim().to_string();
-                    if !builder.is_empty() && is_param_name_valid(&builder) {
+                    if !builder.is_empty() && is_param_name_valid(builder) {
                         if builder == "SameSite" {
                             *state = ParseState::SameSite;
                         } else if builder == "Domain" {
@@ -142,10 +148,7 @@ fn parse_cookies_state_action(state: &mut ParseState, cookie: &mut Cookie, build
             // more trouble than its worth parsing, use Max-Age instead
         },
         ParseState::MaxAge => {
-            cookie.max_age = match builder.parse::<i64>() {
-                Err(_) => -1i64,
-                Ok(a) => a,
-            };
+            cookie.max_age = builder.parse::<i64>().unwrap_or(-1i64);
         },
     };
 
@@ -165,7 +168,7 @@ pub fn parse_cookies(raw_cookies: &str) -> Vec<Cookie> {
     let mut builder = String::new();
 
     for component in raw_cookies.split(';') {
-        parse_cookies_state_transition(&mut state, &mut cookies, &mut cookie, &mut builder, &component);
+        parse_cookies_state_transition(&mut state, &mut cookies, &mut cookie, &mut builder, component);
         parse_cookies_state_action(&mut state, &mut cookie, &mut builder);
     }
     // collect last parsed item
