@@ -24,6 +24,7 @@ pub use crate::immortal::response::Response;
 pub mod response;
 pub mod request;
 pub mod util;
+pub mod cookie;
 
 #[derive(Debug)]
 pub struct Immortal {
@@ -102,19 +103,10 @@ impl Immortal {
                         },
                         Ok(req) => req,
                     };
-                    println!();
-                    println!("  METHOD: {:?}", request.method);
-                    println!("DOCUMENT: {:?}", request.document);
-                    println!("   QUERY: {:?}", request.query);
-                    println!("PROTOCOL: {:?}", request.protocol);
-                    println!(" VERSION: {:?}", request.version);
-                    println!(" HEADERS: {:?}", request.headers);
-                    println!("     GET: {:?}", request.get);
-                    println!("    POST: {:?}", request.post);
 
                     let mut response = Response::new(&request);
 
-                    response.body.append(&mut b"<h1>Hello!</h1>".to_vec());
+                    Self::log(&stream, &request, &response);
 
                     if let Err(e) = stream.write(response.serialize().as_slice()) {
                         if e.kind() == ErrorKind::Interrupted { continue }
@@ -128,6 +120,23 @@ impl Immortal {
                 },
             };
         };
+    }
+
+    fn log(stream: &TcpStream, req: &Request, resp: &Response) {
+        let remote_socket = match stream.peer_addr() {
+            Err(_) => "<no socket>".to_string(),
+            Ok(s) => s.to_string(),
+        };
+        let date = match resp.header("Date") {
+            None => "<no date>",
+            Some(thing) => thing,
+        };
+        let user_agent = match req.header("User-Agent") {
+            None => "<no user-agent>",
+            Some(thing) => thing,
+        };
+        println!("{}\t{}\t{}\t{}\t{}\t{}",
+                 remote_socket, date, req.method, resp.code, req.document, user_agent);
     }
 }
 

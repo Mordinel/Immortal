@@ -138,4 +138,11 @@ impl Response {
 
         serialized
     }
+
+    pub fn header(&self, key: &str) -> Option<&str> {
+        match self.headers.get(key) {
+            None => None,
+            Some(thing) => Some(thing.as_str()),
+        }
+    }
 }

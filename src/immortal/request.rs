@@ -19,6 +19,7 @@ use std::str;
 use std::collections::HashMap;
 
 use crate::immortal::util::*;
+use crate::immortal::cookie::{Cookie, parse_cookies};
 
 #[derive(Debug)]
 pub struct Request {
@@ -31,6 +32,7 @@ pub struct Request {
     pub headers: HashMap<String, String>,
     pub get: HashMap<String, String>,
     pub post: HashMap<String, String>,
+    pub cookies: HashMap<String, Cookie>,
     
     pub host: String,
     pub user_agent: String,
@@ -186,6 +188,7 @@ impl Request {
         let connection = collect_header(&headers, "Connection");
         let content_type = collect_header(&headers, "Content-Type");
         let content_length = collect_header(&headers, "Content-Length");
+        let cookies_raw = collect_header(&headers, "Cookie");
 
         // parse keep-alive status as bool
         let keep_alive = connection == "keep-alive";
@@ -216,6 +219,8 @@ impl Request {
             HashMap::new()
         };
 
+        let cookies = get_cookies(&cookies_raw);
+
         // emit a complete Request object
         Ok(Self {
             body,
@@ -227,6 +232,7 @@ impl Request {
             headers,
             get,
             post,
+            cookies,
             host,
             user_agent,
             connection,
@@ -243,6 +249,10 @@ impl Request {
         }
     }
 
+    pub fn cookie(&self, key: &str) -> Option<&Cookie> {
+        self.cookies.get(key)
+    }
+
     pub fn get(&self, key: &str) -> Option<&str> {
         match self.get.get(key) {
             None => None,
@@ -256,6 +266,20 @@ impl Request {
             Some(thing) => Some(thing.as_str()),
         }
     }
+}
+
+/**
+ * Returns a hashmap of http cookies with the name value as the key
+ */
+fn get_cookies(cookies_raw: &str) -> HashMap<String, Cookie> {
+    let mut cookies = HashMap::new();
+
+    let mut cookie_vec = parse_cookies(cookies_raw);
+    for cookie in cookie_vec {
+        cookies.insert(String::from(&cookie.name), cookie);
+    }
+
+    cookies
 }
 
 /**

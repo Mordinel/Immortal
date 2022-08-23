@@ -19,6 +19,7 @@
 mod tests {
 
     use immortal::immortal::*;
+    use immortal::{Cookie, SameSite};
 
     #[test]
     fn test_request() {
@@ -85,6 +86,39 @@ mod tests {
         assert_eq!(request.post("param_one").unwrap(), "val_one");
         assert_eq!(request.post("param_two").unwrap(), "val=two");
         assert_eq!(request.post("param_three").unwrap(), "val three");
+    }
+
+    #[test]
+    fn test_request_cookies() {
+        let mut buffer = b"".to_vec();
+        buffer.append(&mut b"GET / HTTP/1.1\r\n".to_vec());
+        buffer.append(&mut b"Host: 127.0.0.1\r\n".to_vec());
+        buffer.append(&mut b"Cookie: id=9001; Secure; HttpOnly; SameSite=Lax; other_cookie=cookie_value; HttpOnly; SameSite=Strict; Domain=127.0.0.1; Path=/; last-cookie=short-lived; Max-Age=10;\r\n".to_vec());
+        buffer.append(&mut b"Connection: close\r\n".to_vec());
+        buffer.append(&mut b"\r\n".to_vec());
+        let request = Request::new(buffer.as_mut_slice()).unwrap();
+
+        let cookie_a = request.cookie("id").unwrap();
+        let cookie_b = request.cookie("other_cookie").unwrap();
+        let cookie_c = request.cookie("last-cookie").unwrap();
+
+        assert_eq!(cookie_a.value, "9001");
+        assert_eq!(cookie_a.secure, true);
+        assert_eq!(cookie_a.http_only, true);
+        assert_eq!(cookie_a.same_site, SameSite::Lax);
+
+        assert_eq!(cookie_b.value, "cookie_value");
+        assert_eq!(cookie_b.secure, false);
+        assert_eq!(cookie_b.http_only, true);
+        assert_eq!(cookie_b.same_site, SameSite::Strict);
+        assert_eq!(cookie_b.domain, "127.0.0.1");
+        assert_eq!(cookie_b.path, "/");
+
+        assert_eq!(cookie_c.value, "short-lived");
+        assert_eq!(cookie_c.secure, false);
+        assert_eq!(cookie_c.http_only, false);
+        assert_eq!(cookie_c.same_site, SameSite::Undefined);
+        assert_eq!(cookie_c.max_age, 10i64);
     }
 
     #[test]
