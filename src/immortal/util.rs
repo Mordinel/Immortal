@@ -66,6 +66,7 @@ pub fn url_decode(to_decode: &str) -> Result<String, String> {
                     },
                 };
             },
+            b'\0' => break,
             other => build.push(other),
         }
     }

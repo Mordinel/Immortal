@@ -30,6 +30,7 @@ pub struct Request {
     pub version: String,
     pub headers: HashMap<String, String>,
     pub get: HashMap<String, String>,
+    pub post: HashMap<String, String>,
     
     pub host: String,
     pub user_agent: String,
@@ -56,10 +57,20 @@ impl PartialEq for Request {
         if self.keep_alive != other.keep_alive { return false }
 
         if self.get.len() != other.get.len() { return false }
+        if self.post.len() != other.post.len() { return false }
         if self.headers.len() != other.headers.len() { return false }
 
         for (key, value) in &self.get {
             match other.get.get(key) {
+                None => return false,
+                Some(thing) => {
+                    if value != thing { return false }
+                },
+            }
+        }
+
+        for (key, value) in &self.post {
+            match other.post.get(key) {
                 None => return false,
                 Some(thing) => {
                     if value != thing { return false }
@@ -193,6 +204,18 @@ impl Request {
             Ok(g) => g,
         };
 
+        let post = if method == "POST" && content_type == "application/x-www-form-urlencoded" {
+            match parse_parameters(match &str::from_utf8(&body) {
+                Err(_) => "",
+                Ok(p) => p,
+            }) {
+                Err(_) => HashMap::new(),
+                Ok(p) => p,
+            }
+        } else {
+            HashMap::new()
+        };
+
         // emit a complete Request object
         Ok(Self {
             body,
@@ -203,6 +226,7 @@ impl Request {
             version,
             headers,
             get,
+            post,
             host,
             user_agent,
             connection,
@@ -210,6 +234,27 @@ impl Request {
             content_length,
             keep_alive,
         })
+    }
+
+    pub fn header(&self, key: &str) -> Option<&str> {
+        match self.headers.get(&key.to_ascii_uppercase()) {
+            None => None,
+            Some(thing) => Some(thing.as_str()),
+        }
+    }
+
+    pub fn get(&self, key: &str) -> Option<&str> {
+        match self.get.get(key) {
+            None => None,
+            Some(thing) => Some(thing.as_str()),
+        }
+    }
+
+    pub fn post(&self, key: &str) -> Option<&str> {
+        match self.post.get(key) {
+            None => None,
+            Some(thing) => Some(thing.as_str()),
+        }
     }
 }
 

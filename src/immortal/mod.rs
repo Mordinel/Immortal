@@ -110,6 +110,7 @@ impl Immortal {
                     println!(" VERSION: {:?}", request.version);
                     println!(" HEADERS: {:?}", request.headers);
                     println!("     GET: {:?}", request.get);
+                    println!("    POST: {:?}", request.post);
 
                     let mut response = Response::new(&request);
 

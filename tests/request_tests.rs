@@ -39,9 +39,9 @@ mod tests {
         buffer.append(&mut b"HTTP/1.1".to_vec());
         let request = Request::new(buffer.as_mut_slice()).unwrap();
 
-        assert_eq!(request.get.get("param_one").unwrap(), "val_one");
-        assert_eq!(request.get.get("param_two").unwrap(), "val=two");
-        assert_eq!(request.get.get("param_three").unwrap(), "val three");
+        assert_eq!(request.get("param_one").unwrap(), "val_one");
+        assert_eq!(request.get("param_two").unwrap(), "val=two");
+        assert_eq!(request.get("param_three").unwrap(), "val three");
     }
 
     #[test]
@@ -66,10 +66,41 @@ mod tests {
         assert_eq!(request.content_type, "some_content_type");
         assert_eq!(request.content_length, 13);
         assert_eq!(request.body, b"Hello, World!");
-        assert_eq!(request.headers.get(""), None);
-        assert_eq!(request.headers.get("8&&&x"), None);
-        assert_eq!(request.headers.get("X-Test-Header"), None);
-        assert_eq!(request.headers.get("X-TEST-HEADER").unwrap(), "test");
+        assert_eq!(request.header(""), None);
+        assert_eq!(request.header("8&&&x"), None);
+        assert_eq!(request.header("X-Test-Header").unwrap(), "test");
+    }
+
+    #[test]
+    fn test_request_post() {
+        let mut buffer = b"".to_vec();
+        buffer.append(&mut b"POST / HTTP/1.1\r\n".to_vec());
+        buffer.append(&mut b"Host: 127.0.0.1\r\n".to_vec());
+        buffer.append(&mut b"Connection: close\r\n".to_vec());
+        buffer.append(&mut b"Content-Type: application/x-www-form-urlencoded\r\n".to_vec());
+        buffer.append(&mut b"\r\n".to_vec());
+        buffer.append(&mut b"param_one=val_one&param_two=val=two&param_three=val%20three".to_vec());
+        let request = Request::new(buffer.as_mut_slice()).unwrap();
+
+        assert_eq!(request.post("param_one").unwrap(), "val_one");
+        assert_eq!(request.post("param_two").unwrap(), "val=two");
+        assert_eq!(request.post("param_three").unwrap(), "val three");
+    }
+
+    #[test]
+    fn test_request_post_wrong_content_type() {
+        let mut buffer = b"".to_vec();
+        buffer.append(&mut b"POST / HTTP/1.1\r\n".to_vec());
+        buffer.append(&mut b"Host: 127.0.0.1\r\n".to_vec());
+        buffer.append(&mut b"Connection: close\r\n".to_vec());
+        buffer.append(&mut b"Content-Type: wrong content type\r\n".to_vec());
+        buffer.append(&mut b"\r\n".to_vec());
+        buffer.append(&mut b"param_one=val_one&param_two=val=two&param_three=val%20three".to_vec());
+        let request = Request::new(buffer.as_mut_slice()).unwrap();
+
+        assert_eq!(request.post("param_one"), None);
+        assert_eq!(request.post("param_two"), None);
+        assert_eq!(request.post("param_three"), None);
     }
 
     #[test]
