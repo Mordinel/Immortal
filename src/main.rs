@@ -25,6 +25,20 @@ fn main() {
         Err(e) => panic!("{}", e),
         Ok(i) => i,
     };
+
+    // Eventually, api will look like:
+    //     immortal.fallback(&four_oh_four);
+    //     immortal.register("GET",  "/",       &home);
+    //     immortal.register("GET",  "/login",  &login_page);
+    //     immortal.register("POST", "/login",  &login);
+    //     immortal.register("GET",  "/logout", &logout);
+    //     immortal.register("GET",  "/upload", &upload_page);
+    //     immortal.register("PUT",  "/upload", &upload);
+    // Or maybe:
+    //     immortal.register("GET", "/", |req, resp| {
+    //         ... Handle request for endpoint ...
+    //     });
+
     if let Err(e) = immortal.listen() {
         panic!("{}", e);
     }
