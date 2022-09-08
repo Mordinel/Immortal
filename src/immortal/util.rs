@@ -19,6 +19,15 @@ use std::str;
 use std::collections::HashMap;
 
 /**
+ * Accept a string, filter out the terminal control chars and return the clean string
+ */
+pub fn strip_for_terminal(to_strip: &str) -> String {
+    to_strip.chars()
+        .filter(|chr| !matches!(chr, '\x07'..='\x0D'))
+        .collect::<String>()
+}
+
+/**
  * Accept a byte encoding a hex value and decompose it into its half-byte binary form
  */
 fn from_hex(byte: u8) -> Option<u8> {

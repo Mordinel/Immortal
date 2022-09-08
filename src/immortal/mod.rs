@@ -20,6 +20,7 @@ use std::io::{Read, Write, ErrorKind};
 
 pub use crate::immortal::request::Request;
 pub use crate::immortal::response::Response;
+pub use crate::immortal::util::{strip_for_terminal};
 
 pub mod response;
 pub mod request;
@@ -136,7 +137,12 @@ impl Immortal {
             Some(thing) => thing,
         };
         println!("{}\t{}\t{}\t{}\t{}\t{}",
-                 remote_socket, date, req.method, resp.code, req.document, user_agent);
+                 remote_socket,
+                 date,
+                 strip_for_terminal(&req.method),
+                 resp.code,
+                 strip_for_terminal(&req.document),
+                 strip_for_terminal(user_agent));
     }
 }
 
