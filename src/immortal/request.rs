@@ -16,7 +16,11 @@
 */
 
 use std::str;
+use std::io;
+use std::io::ErrorKind;
 use std::collections::HashMap;
+
+use anyhow::{anyhow, Result};
 
 use crate::immortal::util::*;
 use crate::immortal::cookie::{Cookie, parse_cookies};
@@ -97,53 +101,38 @@ impl Request {
     /**
      * Construct a new request object, parsing the request buffer
      */
-    pub fn new(buf: &mut [u8]) -> Result<Self, String> {
+    pub fn new(buf: &mut [u8]) -> Result<Self> {
         // parse body
-        let (request_head, request_body) = match request_head_body_split(buf) {
-            Err(e) => return Err(e),
-            Ok(tuple) => tuple,
-        };
+        let (request_head, request_body) = request_head_body_split(buf);
+
         let body = match request_body {
             None => vec![],
             Some(thing) => thing.to_vec(),
         };
 
         // split request line and header chunk
-        let (request_line, request_headers) = match request_line_header_split(request_head) {
-            Err(e) => return Err(e),
-            Ok(tuple) => tuple,
-        };
+        let (request_line, request_headers) = request_line_header_split(request_head);
 
         // split to each major component of a request line
         let request_line_items: [&[u8]; 3] = match request_line
             .split(|c| *c == b' ')
             .collect::<Vec<&[u8]>>()
             .try_into() {
-                Err(_) => return Err("Invalid request line".to_string()),
+                Err(_) => return Err(anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid request line"))),
                 Ok(items) => items,
         };
 
         // parse method
-        let method = match str::from_utf8(&request_line_items[0].to_ascii_uppercase()) {
-            Err(e) => return Err(format!("Invalid method string: {}", e)),
-            Ok(m) => m.to_string(),
-        };
+        let method = str::from_utf8(&request_line_items[0].to_ascii_uppercase())?.to_string();
 
         // parse document and query
-        let (document, query) = match split_once(request_line_items[1], b'?') {
-            Err(e) => return Err(e),
-            Ok(tuple) => tuple,
-        };
-        let document = match str::from_utf8(document) {
-            Err(e) => return Err(format!("Invalid document string: {}", e)),
-            Ok(d) => d.to_string(),
-        };
+        let (document, query) = split_once(request_line_items[1], b'?');
+
+        let document = str::from_utf8(document)?.to_string();
+
         let query = match query {
             None => "".to_string(),
-            Some(thing) => match str::from_utf8(thing) {
-                Err(e) => return Err(format!("Invalid query string: {}", e)),
-                Ok(q) => q.to_string(),
-            },
+            Some(thing) => str::from_utf8(thing)?.to_string(),
         };
         
         // parse protocol/version components
@@ -151,36 +140,28 @@ impl Request {
             .split(|c| *c == b'/')
             .collect::<Vec<&[u8]>>()
             .try_into() {
-                Err(_) => return Err("Invalid proto string".to_string()),
+                Err(_) => return Err(anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid proto string"))),
                 Ok(items) => items,
         };
 
         // parse protocol string
-        let protocol = match str::from_utf8(proto_version_items[0]) {
-            Err(e) => return Err(format!("Invalid protocol string: {}", e)),
-            Ok(p) => p.to_string(),
-        };
+        let protocol = str::from_utf8(proto_version_items[0])?.to_string();
+
         if protocol != "HTTP" {
-            return Err("Invalid protocol in proto string".to_string());
+            return Err(anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid protocol in proto string")));
         }
 
         // parse protocol version string
-        let version = match str::from_utf8(proto_version_items[1]) {
-            Err(e) => return Err(format!("Invalid version string: {}", e)),
-            Ok(v) => v.trim_end_matches(|c| c == '\r' || c == '\n' || c == '\0').to_string(),
-        };
+        let version = str::from_utf8(proto_version_items[1])?
+            .trim_end_matches(|c| c == '\r' || c == '\n' || c == '\0')
+            .to_string();
+
         if version != "1.1" {
-            return Err("Invalid version in proto string".to_string());
+            return Err(anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid version in proto string")));
         }
 
         // parse headers
-        let headers = match parse_headers(match request_headers {
-            None => b"",
-            Some(thing) => thing,
-        }) {
-            Err(e) => return Err(format!("Invalid header string: {}", e)),
-            Ok(h) => h,
-        };
+        let headers = parse_headers(request_headers.unwrap_or_default())?;
 
         // collect common headers from the `headers` HashMap
         let host = collect_header(&headers, "Host");
@@ -202,19 +183,10 @@ impl Request {
             Ok(l) => l,
         };
 
-        let get = match parse_parameters(&query) {
-            Err(_) => HashMap::new(),
-            Ok(g) => g,
-        };
+        let get = parse_parameters(&query);
 
         let post = if method == "POST" && content_type == "application/x-www-form-urlencoded" {
-            match parse_parameters(match &str::from_utf8(&body) {
-                Err(_) => "",
-                Ok(p) => p,
-            }) {
-                Err(_) => HashMap::new(),
-                Ok(p) => p,
-            }
+            parse_parameters(&str::from_utf8(&body).unwrap_or_default())
         } else {
             HashMap::new()
         };
@@ -299,7 +271,7 @@ fn collect_header(headers: &HashMap<String, String>, key: &str) -> String {
  * being the buffer slice up to the crlf, and the second being the slice content after the
  * clrf
  */
-fn request_line_header_split(to_split: &[u8]) -> Result<(&[u8], Option<&[u8]>), String> {
+fn request_line_header_split(to_split: &[u8]) -> (&[u8], Option<&[u8]>) {
     let mut found_cr = false;
     let mut found_lf = false;
     let mut crlf_start_idx = 0;
@@ -322,16 +294,16 @@ fn request_line_header_split(to_split: &[u8]) -> Result<(&[u8], Option<&[u8]>), 
     // if no crlf was found or its at index 0, strip off crlf if possible and then return it
     if crlf_start_idx == 0 || !found_cr || !found_lf {
         let line_cleaned = match to_split.strip_suffix(&[b'\r', b'\n']) {
-            None => return Ok((to_split, None)),
+            None => return (to_split, None),
             Some(thing) => thing,
         };
-        return Ok((line_cleaned, None));
+        return (line_cleaned, None);
     }
 
     // build the returned tuple excluding the crlf in the data
     let (req_line, req_headers) = to_split.split_at(crlf_start_idx);
     let req_headers = req_headers.split_at(2).1;
-    Ok((req_line, Some(req_headers)))
+    (req_line, Some(req_headers))
 }
 
 /**
@@ -339,7 +311,7 @@ fn request_line_header_split(to_split: &[u8]) -> Result<(&[u8], Option<&[u8]>), 
  * first being the slice content up to the double crlf, and the second being being the slice 
  * content after the double clrf
  */
-fn request_head_body_split(to_split: &[u8]) -> Result<(&[u8], Option<&[u8]>), String>  {
+fn request_head_body_split(to_split: &[u8]) -> (&[u8], Option<&[u8]>)  {
     let mut found_cr = false;
     let mut crlf_count = 0;
     let mut crlf_start_idx = 0;
@@ -368,17 +340,17 @@ fn request_head_body_split(to_split: &[u8]) -> Result<(&[u8], Option<&[u8]>), St
 
     // if no double crlf was found or its index is at 0, return it
     if crlf_start_idx == 0 {
-        return Ok((to_split, None));
+        return (to_split, None);
     }
 
     // if exited without fulfilling 2 crlf's, return it
     if crlf_count != 2 {
-        return Ok((to_split, None));
+        return (to_split, None);
     }
 
     // build the returned tuple excluding the double crlf in the data
     let (head, body) = to_split.split_at(crlf_start_idx);
     let body = body.split_at(4).1;
-    Ok((head, Some(body)))
+    (head, Some(body))
 }
 

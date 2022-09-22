@@ -18,6 +18,8 @@
 use std::net::{TcpListener, TcpStream};
 use std::io::{Read, Write, ErrorKind};
 
+use anyhow::{anyhow, Result};
+
 pub use crate::immortal::request::Request;
 pub use crate::immortal::response::Response;
 pub use crate::immortal::util::{strip_for_terminal};
@@ -36,12 +38,9 @@ impl Immortal {
     /**
      * Construct a new Immortal server or returns an error
      */
-    pub fn new(socket_str: &str) -> Result<Self, String> {
-        let listener = match TcpListener::bind(socket_str) {
-           Err(e) => return Err(e.to_string()),
-           Ok(listener) => listener,
-        };
-       
+    pub fn new(socket_str: &str) -> Result<Self> {
+        let listener = TcpListener::bind(socket_str)?;
+
         Ok(Self {
             listener,
         })
@@ -50,15 +49,15 @@ impl Immortal {
     /**
      * Listens for incoming connections and sends them to handle_connection
      */
-    pub fn listen(&self) -> Result<(), String> {
+    pub fn listen(&self) -> Result<()> {
         match self.listener.local_addr() {
-            Err(e) => return Err(e.to_string()),
+            Err(e) => return Err(anyhow!(e)),
             Ok(socket) => println!("Server starting at: http://{}", socket),
         };
 
         for stream in self.listener.incoming() {
             match stream {
-                Err(e) => return Err(e.to_string()),
+                Err(e) => return Err(anyhow!(e)),
                 Ok(stream) => self.handle_connection(stream),
             }
         }

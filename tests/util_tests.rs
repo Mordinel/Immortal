@@ -18,7 +18,6 @@
 #[cfg(test)]
 mod tests {
 
-    use std::collections::HashMap;
     use immortal::{url_decode, parse_parameters, parse_headers, is_param_name_valid, split_once};
 
     #[test]
@@ -36,7 +35,10 @@ mod tests {
     #[test]
     fn test_url_decode_invalid_utf8() {
         let to_decode = String::from("%ff");
-        assert_eq!(url_decode(&to_decode), Err(String::from("invalid utf-8 sequence of 1 bytes from index 0")));
+        match url_decode(&to_decode) {
+            Err(e) => assert_eq!(e.valid_up_to(), 0),
+            _ => panic!("Expected Err()"),
+        }
     }
 
     #[test]
@@ -52,7 +54,7 @@ mod tests {
     #[test]
     fn test_parse_parameters() {
         let param_string = String::from("param_one=val_one&param_two=val=two&param_three=val%20three");
-        let params = parse_parameters(&param_string).unwrap();
+        let params = parse_parameters(&param_string);
         assert_eq!(params.get("param_one").unwrap(), "val_one");
         assert_eq!(params.get("param_two").unwrap(), "val=two");
         assert_eq!(params.get("param_three").unwrap(), "val three");
@@ -61,7 +63,7 @@ mod tests {
     #[test]
     fn test_parse_parameters_empty() {
         let param_string = String::from("");
-        let params = parse_parameters(&param_string).unwrap();
+        let params = parse_parameters(&param_string);
         assert_eq!(params.len(), 0);
         assert_eq!(params.get("param_three"), None);
     }
@@ -98,10 +100,10 @@ mod tests {
         let mut buffer = b"".to_vec();
         buffer.append(&mut b"X-Some-Header: some value\r\n".to_vec());
         buffer.append(&mut b"X-Some-\xffOther-Header: some other value".to_vec());
-        assert_eq!(match parse_headers(buffer.as_mut_slice()) {
-            Ok(_) => panic!("Expected error"),
-            Err(e) => Err::<HashMap<String, String>, String>(e),
-        }, Err(String::from("invalid utf-8 sequence of 1 bytes from index 34")));
+        match parse_headers(buffer.as_mut_slice()) {
+            Err(e) => assert_eq!(e.valid_up_to(), 34),
+            _ => panic!("Expected Err()"),
+        }
     }
 
     #[test]
@@ -115,7 +117,7 @@ mod tests {
     #[test]
     fn test_split_once() {
         let to_split = b"to split".to_vec();
-        let (part_one, part_two) = split_once(to_split.as_slice(), b' ').unwrap();
+        let (part_one, part_two) = split_once(to_split.as_slice(), b' ');
         assert_eq!(part_one, b"to");
         assert_eq!(part_two.unwrap(), b"split");
     }
@@ -123,7 +125,7 @@ mod tests {
     #[test]
     fn test_split_once_empty() {
         let to_split = b"".to_vec();
-        let (part_one, part_two) = split_once(to_split.as_slice(), b' ').unwrap();
+        let (part_one, part_two) = split_once(to_split.as_slice(), b' ');
         assert_eq!(part_one, b"");
         assert_eq!(part_two, None);
     }
@@ -131,7 +133,7 @@ mod tests {
     #[test]
     fn test_split_once_no_split() {
         let to_split = b"to split".to_vec();
-        let (part_one, part_two) = split_once(to_split.as_slice(), b'x').unwrap();
+        let (part_one, part_two) = split_once(to_split.as_slice(), b'x');
         assert_eq!(part_one, b"to split");
         assert_eq!(part_two, None);
     }
@@ -139,7 +141,7 @@ mod tests {
     #[test]
     fn test_split_once_no_second_part() {
         let to_split = b"to ".to_vec();
-        let (part_one, part_two) = split_once(to_split.as_slice(), b' ').unwrap();
+        let (part_one, part_two) = split_once(to_split.as_slice(), b' ');
         assert_eq!(part_one, b"to");
         assert_eq!(part_two, None);
     }

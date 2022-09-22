@@ -18,6 +18,9 @@
 #[cfg(test)]
 mod tests {
 
+    use std::io;
+    use std::io::ErrorKind;
+    use std::str::Utf8Error;
     use immortal::immortal::*;
     use immortal::{Cookie, SameSite};
 
@@ -138,127 +141,83 @@ mod tests {
     }
 
     #[test]
-    fn test_request_with_no_crlf() {
+    fn test_request_crlf() {
+        let mut cases: Vec<Vec<u8>> = Vec::new();
+
         let mut buffer = b"GET / HTTP/1.1\r".to_vec();
-        let _request = Request::new(buffer.as_mut_slice());
-    }
+        cases.push(buffer);
 
-    #[test]
-    fn test_request_with_no_double_crlf() {
-        let mut buffer = b"GET / HTTP/1.1\r\n".to_vec();
+        buffer = b"GET / HTTP/1.1\r\n".to_vec();
         buffer.append(&mut b"Host: 127.0.0.1\r\n".to_vec());
-        let _request = Request::new(buffer.as_mut_slice());
+        cases.push(buffer);
+
+        for mut buf in cases {
+            let _request = Request::new(buf.as_mut_slice());
+        }
     }
 
     #[test]
-    fn test_invalid_request_line_empty() {
+    fn test_invalid_input() {
+        let mut cases: Vec<Vec<u8>> = Vec::new();
+
         let mut buffer = b"".to_vec();
-        let request = Request::new(buffer.as_mut_slice());
-        assert_eq!(match request {
-            Ok(_) => panic!("Expected to be invalid"),
-            Err(e) => Err::<immortal::Request, String>(e),
-        }, Err(String::from("Invalid request line")));
+        cases.push(buffer);
+
+        buffer = b"sajf;lkajd;fjkasdfkj;asdjf".to_vec();
+        cases.push(buffer);
+
+        buffer = b"GET /".to_vec();
+        cases.push(buffer);
+
+        buffer = b"GET / HTTPS/1.1".to_vec();
+        cases.push(buffer);
+
+        buffer = b"GET / HTTP/1.0".to_vec();
+        cases.push(buffer);
+
+        for mut buf in cases {
+            let request = Request::new(buf.as_mut_slice());
+            let error = request.unwrap_err();
+            match error.downcast_ref::<io::Error>() {
+                Some(err) => {
+                    assert_eq!(err.kind(), ErrorKind::InvalidInput);
+                }
+                None => panic!("Expected to be io::Error"),
+            }
+        }
     }
 
     #[test]
-    fn test_invalid_request_line_junk() {
-        let mut buffer = b"sajf;lkajd;fjkasdfkj;asdjf".to_vec();
-        let request = Request::new(buffer.as_mut_slice());
-        assert_eq!(match request {
-            Ok(_) => panic!("Expected to be invalid"),
-            Err(e) => Err::<immortal::Request, String>(e),
-        }, Err(String::from("Invalid request line")));
-    }
+    fn test_invalid_data() {
+        let mut cases: Vec<Vec<u8>> = Vec::new();
 
-    #[test]
-    fn test_invalid_request_line_incomplete() {
-        let mut buffer = b"GET /".to_vec();
-        let request = Request::new(buffer.as_mut_slice());
-        assert_eq!(match request {
-            Ok(_) => panic!("Expected to be invalid"),
-            Err(e) => Err::<immortal::Request, String>(e),
-        }, Err(String::from("Invalid request line")));
-    }
+        let mut buffer = b"GE\xffT / HTTP/1.1".to_vec();
+        cases.push(buffer);
 
-    #[test]
-    fn test_invalid_method_string() {
-        let mut buffer = b"G\xffET / HTTP/1.1".to_vec();
-        let request = Request::new(buffer.as_mut_slice());
-        assert_eq!(match request {
-            Ok(_) => panic!("Expected to be invalid"),
-            Err(e) => Err::<immortal::Request, String>(e),
-        }, Err(String::from("Invalid method string: invalid utf-8 sequence of 1 bytes from index 1")));
-    }
+        buffer = b"GET /index\xff.html HTTP/1.1".to_vec();
+        cases.push(buffer);
 
-    #[test]
-    fn test_invalid_document_string() {
-        let mut buffer = b"GET /index\xff.html HTTP/1.1".to_vec();
-        let request = Request::new(buffer.as_mut_slice());
-        assert_eq!(match request {
-            Ok(_) => panic!("Expected to be invalid"),
-            Err(e) => Err::<immortal::Request, String>(e),
-        }, Err(String::from("Invalid document string: invalid utf-8 sequence of 1 bytes from index 6")));
-    }
+        buffer = b"GET /index.html?some_\xffparam=somevalue&a=b HTTP/1.1".to_vec();
+        cases.push(buffer);
 
-    #[test]
-    fn test_invalid_query_string() {
-        let mut buffer = b"GET /index.html?some_\xffparam=somevalue&a=b HTTP/1.1".to_vec();
-        let request = Request::new(buffer.as_mut_slice());
-        assert_eq!(match request {
-            Ok(_) => panic!("Expected to be invalid"),
-            Err(e) => Err::<immortal::Request, String>(e),
-        }, Err(String::from("Invalid query string: invalid utf-8 sequence of 1 bytes from index 5")));
-    }
+        buffer = b"GET / HT\xffTP/1.1".to_vec();
+        cases.push(buffer);
 
-    #[test]
-    fn test_invalid_proto_string_encoding() {
-        let mut buffer = b"GET / HT\xffTP/1.1".to_vec();
-        let request = Request::new(buffer.as_mut_slice());
-        assert_eq!(match request {
-            Ok(_) => panic!("Expected to be invalid"),
-            Err(e) => Err::<immortal::Request, String>(e),
-        }, Err(String::from("Invalid protocol string: invalid utf-8 sequence of 1 bytes from index 2")));
-    }
+        buffer = b"GET / HTTP/1\xff.1".to_vec();
+        cases.push(buffer);
 
-    #[test]
-    fn test_invalid_proto_string_value() {
-        let mut buffer = b"GET / HTTPS/1.1".to_vec();
-        let request = Request::new(buffer.as_mut_slice());
-        assert_eq!(match request {
-            Ok(_) => panic!("Expected to be invalid"),
-            Err(e) => Err::<immortal::Request, String>(e),
-        }, Err(String::from("Invalid protocol in proto string")));
-    }
-
-    #[test]
-    fn test_invalid_version_string_encoding() {
-        let mut buffer = b"GET / HTTP/1\xff.1".to_vec();
-        let request = Request::new(buffer.as_mut_slice());
-        assert_eq!(match request {
-            Ok(_) => panic!("Expected to be invalid"),
-            Err(e) => Err::<immortal::Request, String>(e),
-        }, Err(String::from("Invalid version string: invalid utf-8 sequence of 1 bytes from index 1")));
-    }
-
-    #[test]
-    fn test_invalid_version_string_value() {
-        let mut buffer = b"GET / HTTP/1.0".to_vec();
-        let request = Request::new(buffer.as_mut_slice());
-        assert_eq!(match request {
-            Ok(_) => panic!("Expected to be invalid"),
-            Err(e) => Err::<immortal::Request, String>(e),
-        }, Err(String::from("Invalid version in proto string")));
-    }
-
-    #[test]
-    fn test_invalid_header_string() {
-        let mut buffer = b"GET / HTTP/1.1\r\n".to_vec();
+        buffer = b"GET / HTTP/1.1\r\n".to_vec();
         buffer.append(&mut b"X-Some-Valid-Header: valid header value\r\n".to_vec());
         buffer.append(&mut b"X-Some-Invalid-Header: in\xffvalid header value\r\n\r\n".to_vec());
-        let request = Request::new(buffer.as_mut_slice());
-        assert_eq!(match request {
-            Ok(_) => panic!("Expected to be invalid"),
-            Err(e) => Err::<immortal::Request, String>(e),
-        }, Err(String::from("Invalid header string: invalid utf-8 sequence of 1 bytes from index 66")));
+        cases.push(buffer);
+
+        for mut buf in cases {
+            let request = Request::new(buf.as_mut_slice());
+            let error = request.unwrap_err();
+            assert!(match error.downcast_ref::<Utf8Error>() {
+                Some(_) => true,
+                None => false,
+            });
+        }
     }
 }
