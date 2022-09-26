@@ -22,16 +22,18 @@ use anyhow::{anyhow, Result};
 
 pub use crate::immortal::request::Request;
 pub use crate::immortal::response::Response;
+pub use crate::immortal::router::Router;
 pub use crate::immortal::util::{strip_for_terminal};
 
 pub mod response;
 pub mod request;
+pub mod router;
 pub mod util;
 pub mod cookie;
 
-#[derive(Debug)]
 pub struct Immortal {
     listener: TcpListener,
+    pub route: Router,
 }
 
 impl Immortal {
@@ -43,6 +45,7 @@ impl Immortal {
 
         Ok(Self {
             listener,
+            route: Router::new(),
         })
     }
 
@@ -105,6 +108,8 @@ impl Immortal {
                     };
 
                     let mut response = Response::new(&request);
+
+                    self.route.call(&request.method, &request, &mut response);
 
                     Self::log(&stream, &request, &response);
 

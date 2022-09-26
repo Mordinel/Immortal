@@ -21,11 +21,16 @@ mod immortal;
 fn main() {
     let socket_str = "127.0.0.1:7777";
 
-    let immortal = match Immortal::new(socket_str) {
+    let mut immortal = match Immortal::new(socket_str) {
         Err(e) => panic!("{}", e),
         Ok(i) => i,
     };
 
+    immortal.route.register("GET", "/", |_req, res| {
+        res.code = "200".to_string();
+        res.status = "OK".to_string();
+        res.body = b"<h1>200: Ok</h1>".to_vec();
+    });
     // Eventually, api will look like:
     //     immortal.fallback(&four_oh_four);
     //     immortal.register("GET",  "/",       &home);
