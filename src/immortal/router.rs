@@ -41,7 +41,9 @@ impl Router {
     }
 
     pub fn register(&mut self, method: &str, route: &str, func: Handler) -> bool {
-        self.routes.insert(method.to_string(), HashMap::new());
+        if !self.routes.contains_key(method) {
+            self.routes.insert(method.to_string(), HashMap::new());
+        }
         match self.routes.get_mut(method) {
             None => return false,
             Some(inner) => inner,

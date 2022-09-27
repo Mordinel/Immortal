@@ -31,18 +31,19 @@ fn main() {
         res.status = "OK".to_string();
         res.body = b"<h1>200: Ok</h1>".to_vec();
     });
-    // Eventually, api will look like:
-    //     immortal.fallback(&four_oh_four);
-    //     immortal.register("GET",  "/",       &home);
-    //     immortal.register("GET",  "/login",  &login_page);
-    //     immortal.register("POST", "/login",  &login);
-    //     immortal.register("GET",  "/logout", &logout);
-    //     immortal.register("GET",  "/upload", &upload_page);
-    //     immortal.register("PUT",  "/upload", &upload);
-    // Or maybe:
-    //     immortal.register("GET", "/", |req, resp| {
-    //         ... Handle request for endpoint ...
-    //     });
+
+    immortal.route.register("GET", "/favicon.ico", |_req, res| {
+        res.code = "404".to_string();
+        res.status = "NOT FOUND".to_string();
+        res.body = b"<h1>404: Not found</h1>".to_vec();
+    });
+
+    immortal.route.register("GET", "/teapot", |_req, res| {
+        res.code = "418".to_string();
+        res.status = "I AM A TEAPOT".to_string();
+        res.body = b"<h1>418: I am a little teapot</h1>".to_vec();
+    });
+
 
     if let Err(e) = immortal.listen() {
         panic!("{}", e);
