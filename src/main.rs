@@ -28,19 +28,16 @@ fn main() {
 
     immortal.route.register("GET", "/", |_req, res| {
         res.code = "200".to_string();
-        res.status = "OK".to_string();
         res.body = b"<h1>200: Ok</h1>".to_vec();
     });
 
     immortal.route.register("GET", "/favicon.ico", |_req, res| {
         res.code = "404".to_string();
-        res.status = "NOT FOUND".to_string();
         res.body = b"<h1>404: Not found</h1>".to_vec();
     });
 
     immortal.route.register("GET", "/teapot", |_req, res| {
         res.code = "418".to_string();
-        res.status = "I AM A TEAPOT".to_string();
         res.body = b"<h1>418: I am a little teapot</h1>".to_vec();
     });
 
