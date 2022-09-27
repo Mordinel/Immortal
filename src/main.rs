@@ -41,6 +41,16 @@ fn main() {
         res.body = b"<h1>418: I am a little teapot</h1>".to_vec();
     });
 
+    immortal.route.register("GET", "/hello", |req, res| {
+        res.code = "200".to_string();
+        res.headers.insert("Content-Type".to_string(), "text/plain;charset=UTF-8".to_string());
+        let name = req.get("name").unwrap_or_default();
+        if name.is_empty() {
+            res.body = b"Pass your name into the `name` GET parameter!".to_vec();
+        } else {
+            res.body = format!("Hello {name}!").into_bytes();
+        }
+    });
 
     if let Err(e) = immortal.listen() {
         panic!("{}", e);
