@@ -140,12 +140,18 @@ impl Immortal {
             None => "<no user-agent>",
             Some(thing) => thing,
         };
-        println!("{}\t{}\t{}\t{}\t{}\t{}",
+        println!("{}\t{}\t{}\t{}\t{}\t{}\t{}",
                  remote_socket,
                  date,
                  strip_for_terminal(&req.method),
                  resp.code,
-                 strip_for_terminal(&req.document),
+                 resp.body.len(),
+                 match &req.query.is_empty() {
+                     true => strip_for_terminal(&req.document),
+                     false => {
+                         strip_for_terminal(&req.document) + "?" + &strip_for_terminal(&req.query)
+                     }
+                 },
                  strip_for_terminal(user_agent));
     }
 }

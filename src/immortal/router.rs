@@ -47,7 +47,7 @@ impl Router {
             None => return false,
             Some(inner) => inner,
         }.insert(route.to_string(), func);
-        return true;
+        true
     }
 
     pub fn call(&self, method: &str, req: &Request, res: &mut Response) {

@@ -186,7 +186,7 @@ impl Request {
         let get = parse_parameters(&query);
 
         let post = if method == "POST" && content_type == "application/x-www-form-urlencoded" {
-            parse_parameters(&str::from_utf8(&body).unwrap_or_default())
+            parse_parameters(str::from_utf8(&body).unwrap_or_default())
         } else {
             HashMap::new()
         };
