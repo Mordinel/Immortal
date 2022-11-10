@@ -17,8 +17,10 @@
 
 use std::net::{TcpListener, TcpStream};
 use std::io::{Read, Write, ErrorKind};
+use std::thread;
 
 use anyhow::{anyhow, Result};
+use scoped_pool::Pool;
 
 pub use crate::immortal::request::Request;
 pub use crate::immortal::response::Response;
@@ -33,6 +35,7 @@ pub mod cookie;
 
 pub struct Immortal {
     listener: TcpListener,
+    thread_pool: Pool,
     pub route: Router,
 }
 
@@ -45,6 +48,7 @@ impl Immortal {
 
         Ok(Self {
             listener,
+            thread_pool: Pool::new(thread::available_parallelism()?.get()),
             route: Router::new(),
         })
     }
@@ -58,12 +62,16 @@ impl Immortal {
             Ok(socket) => println!("Server starting at: http://{}", socket),
         };
 
-        for stream in self.listener.incoming() {
-            match stream {
-                Err(e) => return Err(anyhow!(e)),
-                Ok(stream) => self.handle_connection(stream),
+        self.thread_pool.scoped(|scope| {
+            for stream in self.listener.incoming() {
+                match stream {
+                    Err(e) => return Err(anyhow!(e)),
+                    Ok(stream) => scope.execute(|| { self.handle_connection(stream) }),
+                };
             }
-        }
+            Ok(())
+        })?;
+
         Ok(())
     }
 
