@@ -31,6 +31,12 @@ fn not_implemented(_req: &Request, res: &mut Response) {
     res.body = b"<h1>501: Not Implemented</h1>".to_vec();
 }
 
+impl Default for Router {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Router {
     pub fn new() -> Self {
         Self {

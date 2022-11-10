@@ -185,7 +185,7 @@ pub fn parse_headers(to_parse: &[u8]) -> Result<HashMap<String, String>, Utf8Err
     // create a hashmap and populate it with parsed header key-value pairs
     let mut headers = HashMap::new();
     for raw_header in headers_vec {
-        let (header_key, header_value) = match raw_header.split_once(&": ") {
+        let (header_key, header_value) = match raw_header.split_once(": ") {
             None => continue,
             Some(thing) => {
                 // if the header value is empty or the header is invalid, skip the header

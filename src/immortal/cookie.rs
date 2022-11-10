@@ -125,7 +125,7 @@ fn parse_cookies_state_action(state: &mut ParseState, cookie: &mut Cookie, build
             }
         },
         ParseState::Value => {
-            cookie.value = builder.replace(&['"', '\\', ',', '\t', '\r', '\n', '\0'], "");
+            cookie.value = builder.replace(['"', '\\', ',', '\t', '\r', '\n', '\0'], "");
         },
         ParseState::SameSite => {
             if builder == "Strict" {
