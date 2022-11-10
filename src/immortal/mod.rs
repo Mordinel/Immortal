@@ -20,7 +20,7 @@ use std::io::{Read, Write, ErrorKind};
 use std::thread;
 
 use anyhow::{anyhow, Result};
-use scoped_pool::Pool;
+use scoped_thread_pool::Pool;
 
 pub use crate::immortal::request::Request;
 pub use crate::immortal::response::Response;

@@ -8,4 +8,4 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.65"
 chrono = "0.4"
-scoped-pool = "1.0.0"
+scoped-thread-pool = "1.0.1"
