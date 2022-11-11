@@ -138,7 +138,7 @@ impl Immortal {
     fn log(stream: &TcpStream, req: &Request, resp: &Response) {
         let remote_socket = match stream.peer_addr() {
             Err(_) => "<no socket>".to_string(),
-            Ok(s) => s.to_string(),
+            Ok(s) => s.ip().to_string(),
         };
         let date = match resp.header("Date") {
             None => "<no date>",
