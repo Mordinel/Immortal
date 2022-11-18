@@ -21,17 +21,17 @@ use chrono::{DateTime, Utc};
 use crate::immortal::Request;
 
 #[derive(Debug)]
-pub struct Response {
+pub struct Response<'a> {
     pub body: Vec<u8>,
-    pub code: String,
-    pub status: String,
-    pub protocol: String,
+    pub code: &'a str,
+    pub status: &'a str,
+    pub protocol: &'a str,
     pub method: String,
     pub headers: HashMap<String, String>,
     // pub cookies: Vec<Cookie>,
 }
 
-impl Response {
+impl Response<'_> {
     /**
      *  Constructs a default response based on the passed request.
      */
@@ -49,9 +49,9 @@ impl Response {
 
         Self {
             body: vec![],
-            code: "200".to_string(),
-            status: "OK".to_string(),
-            protocol: "HTTP/1.1".to_string(),
+            code: "200",
+            status: "OK",
+            protocol: "HTTP/1.1",
             method: req.method.clone(),
             headers,
         }
@@ -71,9 +71,9 @@ impl Response {
 
         Self {
             body: vec![],
-            code: "400".to_string(),
-            status: "BAD REQUEST".to_string(),
-            protocol: "HTTP/1.1".to_string(),
+            code: "400",
+            status: "BAD REQUEST",
+            protocol: "HTTP/1.1",
             method: "GET".to_string(),
             headers,
         }
@@ -103,16 +103,16 @@ impl Response {
             ( "501".to_string(), "NOT IMPLEMENTED".to_string() ),
         ]);
 
-        let mut status: String = match statuses.get(&self.code) {
-            None => self.status.clone(),
-            Some(thing) => thing.to_string(),
+        let mut status = match statuses.get(self.code) {
+            None => self.status,
+            Some(thing) => thing,
         };
 
         if status.is_empty() {
-            self.code = "500".to_string();
-            status = match statuses.get(&self.code) {
-                None => "INTERNAL SERVER ERROR".to_string(),
-                Some(thing) => thing.to_string(),
+            self.code = "500";
+            status = match statuses.get(self.code) {
+                None => "INTERNAL SERVER ERROR",
+                Some(thing) => thing,
             };
             self.headers.insert("Content-Type".to_string(), "text/html".to_string());
             self.body = format!("<h1>500: {}</h1>", status).into_bytes();

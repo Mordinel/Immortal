@@ -27,7 +27,7 @@ pub struct Router {
 }
 
 fn not_implemented(_req: &Request, res: &mut Response) {
-    res.code = "501".to_string();
+    res.code = "501";
     res.body = b"<h1>501: Not Implemented</h1>".to_vec();
 }
 

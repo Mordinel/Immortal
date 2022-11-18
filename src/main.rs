@@ -27,22 +27,22 @@ fn main() {
     };
 
     immortal.route.register("GET", "/", |_req, res| {
-        res.code = "200".to_string();
+        res.code = "200";
         res.body = b"<h1>200: Ok</h1>".to_vec();
     });
 
     immortal.route.register("GET", "/favicon.ico", |_req, res| {
-        res.code = "404".to_string();
+        res.code = "404";
         res.body = b"<h1>404: Not found</h1>".to_vec();
     });
 
     immortal.route.register("GET", "/teapot", |_req, res| {
-        res.code = "418".to_string();
+        res.code = "418";
         res.body = b"<h1>418: I am a little teapot</h1>".to_vec();
     });
 
     immortal.route.register("GET", "/hello", |req, res| {
-        res.code = "200".to_string();
+        res.code = "200";
         res.headers.insert("Content-Type".to_string(), "text/plain;charset=UTF-8".to_string());
         let name = req.get("name").unwrap_or_default();
         if name.is_empty() {
