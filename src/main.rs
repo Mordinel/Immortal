@@ -43,7 +43,7 @@ fn main() {
 
     immortal.route.register("GET", "/hello", |req, res| {
         res.code = "200";
-        res.headers.insert("Content-Type".to_string(), "text/plain;charset=UTF-8".to_string());
+        res.headers.insert("Content-Type", "text/plain;charset=UTF-8".to_string());
         let name = req.get("name").unwrap_or_default();
         if name.is_empty() {
             res.body = b"Pass your name into the `name` GET parameter!".to_vec();

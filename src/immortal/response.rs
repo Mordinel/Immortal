@@ -27,7 +27,7 @@ pub struct Response<'a> {
     pub status: &'a str,
     pub protocol: &'a str,
     pub method: String,
-    pub headers: HashMap<String, String>,
+    pub headers: HashMap<&'a str, String>,
     // pub cookies: Vec<Cookie>,
 }
 
@@ -36,16 +36,16 @@ impl Response<'_> {
      *  Constructs a default response based on the passed request.
      */
     pub fn new(req: &Request) -> Self {
-        let mut headers: HashMap<String, String> = HashMap::new();
+        let mut headers: HashMap<&str, String> = HashMap::new();
         let now: DateTime<Utc> = Utc::now();
 
         // default headers
-        headers.insert("Date".to_string(), now.format("%a, %d %b %Y %H:%M:%S").to_string());
-        headers.insert("Connection".to_string(), match req.keep_alive {
+        headers.insert("Date", now.format("%a, %d %b %Y %H:%M:%S").to_string());
+        headers.insert("Connection", match req.keep_alive {
             true => "keep-alive".to_string(),
             false => "close".to_string(),
         });
-        headers.insert("Content-Type".to_string(), "text/html".to_string());
+        headers.insert("Content-Type", "text/html".to_string());
 
         Self {
             body: vec![],
@@ -61,13 +61,13 @@ impl Response<'_> {
      * Constructs a default error response
      */
     pub fn bad() -> Self {
-        let mut headers: HashMap<String, String> = HashMap::new();
+        let mut headers: HashMap<&str, String> = HashMap::new();
         let now: DateTime<Utc> = Utc::now();
 
         // default headers
-        headers.insert("Date".to_string(), now.format("%a, %d %b %Y %H:%M:%S").to_string());
-        headers.insert("Connection".to_string(),  "close".to_string());
-        headers.insert("Content-Type".to_string(), "text/html".to_string());
+        headers.insert("Date", now.format("%a, %d %b %Y %H:%M:%S").to_string());
+        headers.insert("Connection",  "close".to_string());
+        headers.insert("Content-Type", "text/html".to_string());
 
         Self {
             body: vec![],
@@ -114,7 +114,7 @@ impl Response<'_> {
                 None => "INTERNAL SERVER ERROR",
                 Some(thing) => thing,
             };
-            self.headers.insert("Content-Type".to_string(), "text/html".to_string());
+            self.headers.insert("Content-Type", "text/html".to_string());
             self.body = format!("<h1>500: {}</h1>", status).into_bytes();
         }
 
