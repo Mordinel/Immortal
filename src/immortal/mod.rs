@@ -17,6 +17,7 @@
 
 use std::net::{TcpListener, TcpStream};
 use std::io::{Read, Write, ErrorKind};
+use std::ops::{Deref, DerefMut};
 use std::thread;
 
 use anyhow::{anyhow, Result};
@@ -36,7 +37,20 @@ pub mod cookie;
 pub struct Immortal {
     listener: TcpListener,
     thread_pool: Pool,
-    pub route: Router,
+    route: Router,
+}
+
+impl Deref for Immortal {
+    type Target = Router;
+    fn deref(&self) -> &Router {
+        &self.route
+    }
+}
+
+impl DerefMut for Immortal {
+    fn deref_mut(&mut self) -> &mut Router {
+        &mut self.route
+    }
 }
 
 impl Immortal {
@@ -117,7 +131,7 @@ impl Immortal {
 
                     let mut response = Response::new(&request);
 
-                    self.route.call(&request.method, &request, &mut response);
+                    self.call(&request.method, &request, &mut response);
 
                     Self::log(&stream, &request, &response);
 
