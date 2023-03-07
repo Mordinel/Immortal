@@ -8,4 +8,5 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.65"
 chrono = "0.4"
+openssl = "0.10.45"
 scoped-thread-pool = "1.0.2"
