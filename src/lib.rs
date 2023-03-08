@@ -1,4 +1,5 @@
 
+#![feature(iter_intersperse)]
 pub use crate::immortal::Immortal;
 pub use crate::immortal::request::Request;
 pub use crate::immortal::response::Response;

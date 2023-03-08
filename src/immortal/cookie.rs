@@ -27,6 +27,34 @@ impl Default for Cookie {
     }
 }
 
+impl ToString for Cookie {
+    fn to_string(&self) -> String {
+        let mut out = format!("{}={}", self.name, self.value);
+        if self.secure {
+            out += "; Secure";
+        }
+        if self.http_only {
+            out += "; HttpOnly";
+        }
+        out += match self.same_site {
+            SameSite::Undefined => "",
+            SameSite::No => "; SameSite=No",
+            SameSite::Lax => "; SameSite=Lax",
+            SameSite::Strict => "; SameSite=Strict",
+        };
+        if !self.domain.is_empty() {
+            out += &format!("; Domain={}", self.domain);
+        }
+        if !self.path.is_empty() {
+            out += &format!("; Path={}", self.path);
+        }
+        if self.max_age < 1 {
+            out += &format!("; Max-Age={}", self.max_age);
+        }
+        out
+    }
+}
+
 impl Cookie {
     pub fn new() -> Self {
         Self {
@@ -39,6 +67,66 @@ impl Cookie {
             path: String::new(),
             max_age: -1i64,
         }
+    }
+    
+    pub fn builder() -> CookieBuilder {
+        CookieBuilder::new()
+    }
+}
+
+pub struct CookieBuilder {
+    cookie: Cookie,
+}
+
+impl CookieBuilder {
+    pub fn new() -> Self {
+        Self {
+            cookie: Cookie::new(),
+        }
+    }
+
+    pub fn name(mut self, name: &str) -> Self {
+        self.cookie.name = name.to_owned();
+        self
+    }
+
+    pub fn value(mut self, value: &str) -> Self {
+        self.cookie.value = value.to_owned();
+        self
+    }
+
+    pub fn secure(mut self, secure: bool) -> Self {
+        self.cookie.secure = secure;
+        self
+    }
+
+    pub fn http_only(mut self, http_only: bool) -> Self {
+        self.cookie.http_only = http_only;
+        self
+    }
+
+    pub fn same_site(mut self, same_site: SameSite) -> Self {
+        self.cookie.same_site = same_site;
+        self
+    }
+
+    pub fn domain(mut self, domain: &str) -> Self {
+        self.cookie.domain = domain.to_owned();
+        self
+    }
+
+    pub fn path(mut self, path: &str) -> Self {
+        self.cookie.path = path.to_owned();
+        self
+    }
+
+    pub fn max_age(mut self, max_age: i64) -> Self {
+        self.cookie.max_age = max_age;
+        self
+    }
+
+    pub fn build(self) -> Cookie {
+        self.cookie.clone()
     }
 }
 

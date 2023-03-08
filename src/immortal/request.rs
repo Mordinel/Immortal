@@ -1,13 +1,19 @@
 
-use std::str;
-use std::io;
-use std::io::ErrorKind;
-use std::collections::HashMap;
+use std::{
+    str, io,
+    io::ErrorKind,
+    collections::HashMap,
+};
 
 use anyhow::{anyhow, Result};
 
-use crate::immortal::util::*;
-use crate::immortal::cookie::{Cookie, parse_cookies};
+use super::{
+    SessionManagerMtx,
+    cookie::{Cookie, parse_cookies},
+    util::*,
+};
+
+pub type Cookies = HashMap<String, Cookie>;
 
 #[derive(Debug)]
 pub struct Request {
@@ -20,7 +26,7 @@ pub struct Request {
     pub headers: HashMap<String, String>,
     pub get: HashMap<String, String>,
     pub post: HashMap<String, String>,
-    pub cookies: HashMap<String, Cookie>,
+    pub cookies: Cookies,
     
     pub host: String,
     pub user_agent: String,
@@ -85,7 +91,7 @@ impl Request {
     /**
      * Construct a new request object, parsing the request buffer
      */
-    pub fn new(buf: &mut [u8]) -> Result<Self> {
+    pub fn new(buf: &mut [u8], session_manager: &SessionManagerMtx) -> Result<Self> {
         // parse body
         let (request_head, request_body) = request_head_body_split(buf);
 

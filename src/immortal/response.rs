@@ -2,7 +2,11 @@
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 
-use crate::immortal::Request;
+use super::{
+    SessionManagerMtx,
+    Request,
+    cookie::Cookie,
+};
 
 #[derive(Debug)]
 pub struct Response<'a> {
@@ -12,14 +16,14 @@ pub struct Response<'a> {
     pub protocol: &'a str,
     pub method: String,
     pub headers: HashMap<&'a str, String>,
-    // pub cookies: Vec<Cookie>,
+    pub cookies: Vec<Cookie>,
 }
 
 impl Response<'_> {
     /**
      *  Constructs a default response based on the passed request.
      */
-    pub fn new(req: &Request) -> Self {
+    pub fn new(req: &Request, session_manager: &SessionManagerMtx) -> Self {
         let mut headers: HashMap<&str, String> = HashMap::new();
         let now: DateTime<Utc> = Utc::now();
 
@@ -31,6 +35,22 @@ impl Response<'_> {
         });
         headers.insert("Content-Type", "text/html".to_string());
 
+        let mut cookies: Vec<Cookie> = Vec::new();
+        match session_manager.lock() {
+            Err(_) => {},
+            Ok(mut session_manager) => {
+                let (session_id, is_new) = session_manager.get_or_create_session(&req.cookies).unwrap();
+                println!("Session got or created: {session_id}, the session is new? {is_new}");
+                if is_new {
+                    cookies.push(Cookie::builder()
+                                 .name("id")
+                                 .value(&session_id)
+                                 .http_only(true)
+                                 .build());
+                }
+            }
+        }
+
         Self {
             body: vec![],
             code: "200",
@@ -38,6 +58,7 @@ impl Response<'_> {
             protocol: "HTTP/1.1",
             method: req.method.clone(),
             headers,
+            cookies,
         }
     }
 
@@ -60,6 +81,7 @@ impl Response<'_> {
             protocol: "HTTP/1.1",
             method: "GET".to_string(),
             headers,
+            cookies: Vec::new(),
         }
     }
 
@@ -110,6 +132,13 @@ impl Response<'_> {
             if !key.is_empty() {
                 serialized.append(&mut format!("{}: {}\r\n", &key, &value).into_bytes());
             }
+        }
+
+        if !self.cookies.is_empty() {
+            self.headers.insert("Set-Cookie", self.cookies.iter()
+                                .map(|c| c.to_string())
+                                .intersperse("; ".to_string())
+                                .reduce(|acc, c| acc + &c).unwrap());
         }
 
         // output content or not depending on the request method
