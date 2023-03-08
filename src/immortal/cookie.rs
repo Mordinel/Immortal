@@ -48,7 +48,7 @@ impl ToString for Cookie {
         if !self.path.is_empty() {
             out += &format!("; Path={}", self.path);
         }
-        if self.max_age < 1 {
+        if self.max_age > 0 {
             out += &format!("; Max-Age={}", self.max_age);
         }
         out

@@ -8,7 +8,6 @@ use std::{
 use anyhow::{anyhow, Result};
 
 use super::{
-    SessionManagerMtx,
     cookie::{Cookie, parse_cookies},
     util::*,
 };
@@ -91,7 +90,7 @@ impl Request {
     /**
      * Construct a new request object, parsing the request buffer
      */
-    pub fn new(buf: &mut [u8], session_manager: &SessionManagerMtx) -> Result<Self> {
+    pub fn new(buf: &mut [u8]) -> Result<Self> {
         // parse body
         let (request_head, request_body) = request_head_body_split(buf);
 

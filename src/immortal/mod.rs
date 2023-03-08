@@ -76,7 +76,7 @@ fn handle_connection(mut stream: TcpStream, session_manager: &SessionManagerMtx,
         match read_sz {
             0 => break,
             _ => {
-                let request = match Request::new(&mut buf, session_manager) {
+                let request = match Request::new(&mut buf) {
                     Err(_) => {
                         let mut response = Response::bad();
                         match stream.write(response.serialize().as_slice()) {
@@ -95,7 +95,7 @@ fn handle_connection(mut stream: TcpStream, session_manager: &SessionManagerMtx,
 
                 let mut response = Response::new(&request, session_manager);
 
-                router.call(&request.method, &request, &mut response);
+                router.call(&request.method, &request, &mut response, session_manager);
 
                 log(&stream, &request, &response);
 

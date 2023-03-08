@@ -39,7 +39,6 @@ impl SessionManager {
     }
 
     pub fn create_session(&mut self) -> Option<String> {
-        println!("Creating Session...");
         // generate a random ID
         let mut buf = [0u8;28];
         rand_bytes(&mut buf).unwrap();
@@ -51,7 +50,6 @@ impl SessionManager {
     }
 
     pub fn write_session(&mut self, session_id: &str, key: &str, value: &str) -> bool {
-        println!("Writing {key} : {value} to session {session_id}");
         if let Some(session) = self.store.get_mut(session_id) {
             session.data.insert(key.to_owned(), value.to_owned());
             return true;
@@ -60,7 +58,6 @@ impl SessionManager {
     }
 
     pub fn read_session(&mut self, session_id: &str, key: &str) -> Option<&str> {
-        println!("Reading session {session_id}...");
         if let Some(session) = self.store.get_mut(session_id) {
             if let Some(value) = session.data.get(key) {
                 return Some(value);
@@ -70,7 +67,6 @@ impl SessionManager {
     }
 
     pub fn clear_session(&mut self, session_id: &str) {
-        println!("Clearing session {session_id}...");
         if let Some(session) = self.store.get_mut(session_id) {
             session.data.clear();
             session.data.shrink_to_fit();
@@ -78,22 +74,18 @@ impl SessionManager {
     }
 
     pub fn delete_session(&mut self, session_id: &str) {
-        println!("Deleting session {session_id}...");
         self.store.remove(session_id);
     }
 
     pub fn session_exists(&self, session_id: &str) -> bool {
-        println!("Checking if session {session_id} exists...");
         self.store.contains_key(session_id)
     }
 
     pub fn get_or_create_session(&mut self, cookies: &Cookies) -> Option<(String, bool)>{
-        println!("Get or create session...");
         let mut session_id = String::new();
 
         let mut is_new_session = false;
         if cookies.contains_key("id") {
-            println!("Session contains a cookie...");
             session_id = match cookies.get("id") {
                 None => String::new(),
                 Some(thing) => {
@@ -101,7 +93,6 @@ impl SessionManager {
                 }
             };
             if !self.session_exists(&session_id) {
-                println!("The session from the id doesn't exist...");
                 session_id = match self.create_session() {
                     None => return None,
                     Some(thing) => thing,
@@ -109,7 +100,6 @@ impl SessionManager {
                 is_new_session = true;
             }
         } else {
-            println!("The session does not contain a cookie...");
             if !self.session_exists(&session_id) {
                 session_id = match self.create_session() {
                     None => return None,

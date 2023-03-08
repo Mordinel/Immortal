@@ -1,16 +1,19 @@
 
 use std::collections::HashMap;
-use crate::immortal::request::Request;
-use crate::immortal::response::Response;
+use super::{
+    request::Request,
+    response::Response,
+    SessionManagerMtx,
+};
 
-pub type Handler = fn(&Request, &mut Response);
+pub type Handler = fn(&SessionManagerMtx, &Request, &mut Response);
 
 pub struct Router {
     fallback: Handler,
     routes: HashMap<String, HashMap<String, Handler>>,
 }
 
-fn not_implemented(_req: &Request, res: &mut Response) {
+fn not_implemented(_sess: &SessionManagerMtx, _req: &Request, res: &mut Response) {
     res.code = "501";
     res.body = b"<h1>501: Not Implemented</h1>".to_vec();
 }
@@ -40,22 +43,27 @@ impl Router {
         true
     }
 
-    pub fn call(&self, method: &str, req: &Request, res: &mut Response) {
+    pub fn call(
+        &self,
+        method: &str,
+        req: &Request,
+        res: &mut Response,
+        session_manager: &SessionManagerMtx) {
         let by_method = match self.routes.get(method) {
             None => {
-                (self.fallback)(req, res);
+                (self.fallback)(session_manager, req, res);
                 return;
             },
             Some(inner) => inner,
         };
         let func = match by_method.get(&req.document) {
             None => {
-                (self.fallback)(req, res);
+                (self.fallback)(session_manager, req, res);
                 return;
             },
             Some(inner) => inner,
         };
-        func(req, res);
+        func(session_manager, req, res);
     }
 }
 

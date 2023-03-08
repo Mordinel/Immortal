@@ -40,7 +40,6 @@ impl Response<'_> {
             Err(_) => {},
             Ok(mut session_manager) => {
                 let (session_id, is_new) = session_manager.get_or_create_session(&req.cookies).unwrap();
-                println!("Session got or created: {session_id}, the session is new? {is_new}");
                 if is_new {
                     cookies.push(Cookie::builder()
                                  .name("id")
@@ -124,6 +123,13 @@ impl Response<'_> {
             self.body = format!("<h1>500: {}</h1>", status).into_bytes();
         }
 
+        if !self.cookies.is_empty() {
+            self.headers.insert("Set-Cookie", self.cookies.iter()
+                                .map(|c| c.to_string())
+                                .intersperse("; ".to_string())
+                                .reduce(|acc, c| acc + &c).unwrap());
+        }
+
         // emit the status line
         serialized.append(&mut format!("{} {} {}\r\n", &self.protocol, &self.code, &status).into_bytes());
 
@@ -134,12 +140,6 @@ impl Response<'_> {
             }
         }
 
-        if !self.cookies.is_empty() {
-            self.headers.insert("Set-Cookie", self.cookies.iter()
-                                .map(|c| c.to_string())
-                                .intersperse("; ".to_string())
-                                .reduce(|acc, c| acc + &c).unwrap());
-        }
 
         // output content or not depending on the request method
         if self.method != "HEAD" {
