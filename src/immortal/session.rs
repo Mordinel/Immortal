@@ -19,6 +19,7 @@ impl Session {
 
 pub type SessionStore = HashMap<String, Session>;
 
+#[derive(Default)]
 pub struct SessionManager {
     store: SessionStore,
 }
@@ -46,7 +47,7 @@ impl SessionManager {
 
         if self.store.contains_key(&out) { return None }
         self.store.insert(out.to_owned(), Session::new(&out));
-        return Some(out);
+        Some(out)
     }
 
     pub fn write_session(&mut self, session_id: &str, key: &str, value: &str) -> bool {
@@ -63,7 +64,7 @@ impl SessionManager {
                 return Some(value);
             }
         }
-        return None;
+        None
     }
 
     pub fn clear_session(&mut self, session_id: &str) {
@@ -99,14 +100,12 @@ impl SessionManager {
                 };
                 is_new_session = true;
             }
-        } else {
-            if !self.session_exists(&session_id) {
-                session_id = match self.create_session() {
-                    None => return None,
-                    Some(thing) => thing,
-                };
-                is_new_session = true;
-            }
+        } else if !self.session_exists(&session_id) {
+            session_id = match self.create_session() {
+                None => return None,
+                Some(thing) => thing,
+            };
+            is_new_session = true;
         }
         Some((session_id, is_new_session))
     }

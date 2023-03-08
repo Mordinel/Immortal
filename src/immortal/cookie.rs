@@ -74,6 +74,7 @@ impl Cookie {
     }
 }
 
+#[derive(Default)]
 pub struct CookieBuilder {
     cookie: Cookie,
 }
@@ -126,7 +127,7 @@ impl CookieBuilder {
     }
 
     pub fn build(self) -> Cookie {
-        self.cookie.clone()
+        self.cookie
     }
 }
 
