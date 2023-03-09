@@ -41,14 +41,11 @@ impl Router {
 
     pub fn unregister(&mut self, method: &str, route: &str) -> bool {
         match self.routes.get_mut(method) {
-            None => return false,
+            None => false,
             Some(inner) => {
-                match inner.remove(route) {
-                    None => return false,
-                    Some(_) => return true,
-                };
+                inner.remove(route).is_some()
             },
-        };
+        }
     }
 
     pub fn call(

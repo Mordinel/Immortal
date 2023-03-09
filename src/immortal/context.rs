@@ -30,11 +30,11 @@ impl<'a, 'b> ImmortalContext<'a, 'b> {
      */
     pub fn write_session(&mut self, session_id: &str, key: &str, value: &str) -> bool {
         match self.session_manager.lock() {
-            Err(_) => return false,
+            Err(_) => false,
             Ok(mut session_manager) => {
-                return session_manager.write_session(session_id, key, value);
+                session_manager.write_session(session_id, key, value)
             },
-        };
+        }
     }
 
     /**
@@ -43,11 +43,11 @@ impl<'a, 'b> ImmortalContext<'a, 'b> {
      */
     pub fn read_session(&self, session_id: &str, key: &str) -> Option<String> {
         match self.session_manager.lock() {
-            Err(_) => return None,
+            Err(_) => None,
             Ok(session_manager) => {
-                return session_manager.read_session(session_id, key);
+                session_manager.read_session(session_id, key)
             },
-        };
+        }
     }
 
     /**
@@ -55,11 +55,11 @@ impl<'a, 'b> ImmortalContext<'a, 'b> {
      */
     pub fn clear_session(&mut self, session_id: &str) {
         match self.session_manager.lock() {
-            Err(_) => return,
+            Err(_) => (),
             Ok(mut session_manager) => {
-                return session_manager.clear_session(session_id);
+                session_manager.clear_session(session_id)
             },
-        };
+        }
     }
 
     /**
@@ -68,11 +68,11 @@ impl<'a, 'b> ImmortalContext<'a, 'b> {
      */
     pub fn delete_session(&mut self, session_id: &str) {
         match self.session_manager.lock() {
-            Err(_) => return,
+            Err(_) => (),
             Ok(mut session_manager) => {
-                return session_manager.delete_session(session_id);
+                session_manager.delete_session(session_id)
             },
-        };
+        }
     }
 
     /**
@@ -80,11 +80,11 @@ impl<'a, 'b> ImmortalContext<'a, 'b> {
      */
     pub fn session_exists(&self, session_id: &str) -> bool {
         match self.session_manager.lock() {
-            Err(_) => return false,
+            Err(_) => false,
             Ok(session_manager) => {
-                return session_manager.session_exists(session_id);
+                session_manager.session_exists(session_id)
             },
-        };
+        }
     }
 
     /**

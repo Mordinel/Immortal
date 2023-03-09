@@ -28,7 +28,7 @@ fn main() {
     });
 
     immortal.register("GET", "/login", |ctx| {
-        if let Some(_) = ctx.read_session(&ctx.request.session_id, "username") {
+        if ctx.read_session(&ctx.request.session_id, "username").is_some() {
             ctx.response.code = "302";
             ctx.response.headers.insert("Location", String::from("/"));
             return;
@@ -57,7 +57,7 @@ fn main() {
 
     immortal.register("POST", "/login", |ctx| {
         ctx.response.code = "302";
-        if let Some(_) = ctx.read_session(&ctx.request.session_id, "username") {
+        if ctx.read_session(&ctx.request.session_id, "username").is_some() {
             ctx.response.headers.insert("Location", "/".to_string());
             return;
         }
