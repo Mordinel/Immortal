@@ -1,8 +1,6 @@
-
 use std::{
     net::{TcpListener, TcpStream},
     io::{Read, Write, ErrorKind},
-    ops::{Deref, DerefMut},
     sync::{Arc, Mutex},
     thread,
 };
@@ -16,12 +14,17 @@ pub mod router;
 pub mod util;
 pub mod cookie;
 pub mod session;
+pub mod context;
 
 pub use crate::immortal::{
     request::Request,
     response::Response,
-    router::Router,
+    router::{
+        Router,
+        Handler,
+    },
     session::SessionManager,
+    context::ImmortalContext,
     util::strip_for_terminal,
 };
 
@@ -76,7 +79,7 @@ fn handle_connection(mut stream: TcpStream, session_manager: &SessionManagerMtx,
         match read_sz {
             0 => break,
             _ => {
-                let request = match Request::new(&mut buf) {
+                let mut request = match Request::new(&mut buf) {
                     Err(_) => {
                         let mut response = Response::bad();
                         match stream.write(response.serialize().as_slice()) {
@@ -93,9 +96,10 @@ fn handle_connection(mut stream: TcpStream, session_manager: &SessionManagerMtx,
                     Ok(req) => req,
                 };
 
-                let mut response = Response::new(&request, session_manager);
+                let mut response = Response::new(&mut request, session_manager);
 
-                router.call(&request.method, &request, &mut response, session_manager);
+                let ctx = ImmortalContext::new(&request, &mut response, session_manager);
+                router.call(&request.method, ctx);
 
                 log(&stream, &request, &response);
 
@@ -119,19 +123,6 @@ pub struct Immortal {
     thread_pool: Pool,
     router: Router,
     session_manager: SessionManagerMtx,
-}
-
-impl Deref for Immortal {
-    type Target = Router;
-    fn deref(&self) -> &Router {
-        &self.router
-    }
-}
-
-impl DerefMut for Immortal {
-    fn deref_mut(&mut self) -> &mut Router {
-        &mut self.router
-    }
 }
 
 impl Immortal {
@@ -172,5 +163,18 @@ impl Immortal {
 
         Ok(())
     }
+
+    /**
+     * Calls into the router to register a function
+     * Returns true if a route was registered
+     */
+    pub fn register(&mut self, method: &str, route: &str, func: Handler) -> bool {
+        self.router.register(method, route, func)
+    }
+
+    pub fn unregister(&mut self, method: &str, route: &str) -> bool {
+        self.router.unregister(method, route)
+    }
+
 }
 

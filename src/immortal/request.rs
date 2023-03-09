@@ -29,6 +29,7 @@ pub struct Request {
     
     pub host: String,
     pub user_agent: String,
+    pub session_id: String,
     pub connection: String,
     pub content_type: String,
     pub content_length: usize,
@@ -181,6 +182,7 @@ impl Request {
         };
 
         let cookies = get_cookies(&cookies_raw);
+        let session_id = String::new();
 
         // emit a complete Request object
         Ok(Self {
@@ -196,6 +198,7 @@ impl Request {
             cookies,
             host,
             user_agent,
+            session_id,
             connection,
             content_type,
             content_length,

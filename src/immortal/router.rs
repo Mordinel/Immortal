@@ -1,21 +1,17 @@
 
 use std::collections::HashMap;
-use super::{
-    request::Request,
-    response::Response,
-    SessionManagerMtx,
-};
+use super::ImmortalContext;
 
-pub type Handler = fn(&SessionManagerMtx, &Request, &mut Response);
+pub type Handler = fn(&mut ImmortalContext);
 
 pub struct Router {
     fallback: Handler,
     routes: HashMap<String, HashMap<String, Handler>>,
 }
 
-fn not_implemented(_sess: &SessionManagerMtx, _req: &Request, res: &mut Response) {
-    res.code = "501";
-    res.body = b"<h1>501: Not Implemented</h1>".to_vec();
+fn not_implemented(ctx: &mut ImmortalContext) {
+    ctx.response.code = "501";
+    ctx.response.body = b"<h1>501: Not Implemented</h1>".to_vec();
 }
 
 impl Default for Router {
@@ -43,27 +39,37 @@ impl Router {
         true
     }
 
+    pub fn unregister(&mut self, method: &str, route: &str) -> bool {
+        match self.routes.get_mut(method) {
+            None => return false,
+            Some(inner) => {
+                match inner.remove(route) {
+                    None => return false,
+                    Some(_) => return true,
+                };
+            },
+        };
+    }
+
     pub fn call(
         &self,
         method: &str,
-        req: &Request,
-        res: &mut Response,
-        session_manager: &SessionManagerMtx) {
+        mut ctx: ImmortalContext) {
         let by_method = match self.routes.get(method) {
             None => {
-                (self.fallback)(session_manager, req, res);
+                (self.fallback)(&mut ctx);
                 return;
             },
             Some(inner) => inner,
         };
-        let func = match by_method.get(&req.document) {
+        let func = match by_method.get(&ctx.request.document) {
             None => {
-                (self.fallback)(session_manager, req, res);
+                (self.fallback)(&mut ctx);
                 return;
             },
             Some(inner) => inner,
         };
-        func(session_manager, req, res);
+        func(&mut ctx);
     }
 }
 

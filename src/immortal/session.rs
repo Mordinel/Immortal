@@ -58,10 +58,10 @@ impl SessionManager {
         false
     }
 
-    pub fn read_session(&mut self, session_id: &str, key: &str) -> Option<&str> {
-        if let Some(session) = self.store.get_mut(session_id) {
+    pub fn read_session(&self, session_id: &str, key: &str) -> Option<String> {
+        if let Some(session) = self.store.get(session_id) {
             if let Some(value) = session.data.get(key) {
-                return Some(value);
+                return Some(value.to_owned());
             }
         }
         None
@@ -76,6 +76,7 @@ impl SessionManager {
 
     pub fn delete_session(&mut self, session_id: &str) {
         self.store.remove(session_id);
+        self.store.shrink_to_fit();
     }
 
     pub fn session_exists(&self, session_id: &str) -> bool {
@@ -110,3 +111,4 @@ impl SessionManager {
         Some((session_id, is_new_session))
     }
 }
+

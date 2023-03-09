@@ -23,7 +23,7 @@ impl Response<'_> {
     /**
      *  Constructs a default response based on the passed request.
      */
-    pub fn new(req: &Request, session_manager: &SessionManagerMtx) -> Self {
+    pub fn new(req: &mut Request, session_manager: &SessionManagerMtx) -> Self {
         let mut headers: HashMap<&str, String> = HashMap::new();
         let now: DateTime<Utc> = Utc::now();
 
@@ -40,10 +40,11 @@ impl Response<'_> {
             Err(_) => {},
             Ok(mut session_manager) => {
                 let (session_id, is_new) = session_manager.get_or_create_session(&req.cookies).unwrap();
+                req.session_id = session_id;
                 if is_new {
                     cookies.push(Cookie::builder()
                                  .name("id")
-                                 .value(&session_id)
+                                 .value(&req.session_id)
                                  .http_only(true)
                                  .build());
                 }
