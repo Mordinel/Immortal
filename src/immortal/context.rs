@@ -2,6 +2,7 @@
 use super::{
     request::Request,
     response::Response,
+    util::escape_html,
     SessionManagerMtx,
 };
 
@@ -21,9 +22,11 @@ impl<'a, 'b> ImmortalContext<'a, 'b> {
             session_manager,
         }
     }
+
     /**
      * Makes a write to a session with a key and value
      * Returns true if a write happened to a session, false if no session id exists
+     * Writing an empty string to this will remove the item from the session storage
      */
     pub fn write_session(&mut self, session_id: &str, key: &str, value: &str) -> bool {
         match self.session_manager.lock() {
@@ -82,5 +85,12 @@ impl<'a, 'b> ImmortalContext<'a, 'b> {
                 return session_manager.session_exists(session_id);
             },
         };
+    }
+
+    /**
+     * Returns a copy of str with html specific characters escaped
+     */
+    pub fn html_escape(&self, str: &str) -> String {
+        escape_html(str)
     }
 }

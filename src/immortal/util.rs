@@ -4,6 +4,25 @@ use std::str::Utf8Error;
 use std::collections::HashMap;
 
 /**
+ * Performs html escaping on str
+ */
+pub fn escape_html(str: &str) -> String {
+    let mut out = String::new();
+    for ch in str.chars() {
+        match ch {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&#34;"),
+            '\'' => out.push_str("&#39;"),
+            ';' => out.push_str("&#59;"),
+            _ => out.push(ch),
+        }
+    }
+    out
+}
+
+/**
  * Accept a string, filter out the terminal control chars and return the clean string
  */
 pub fn strip_for_terminal(to_strip: &str) -> String {

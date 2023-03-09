@@ -171,9 +171,15 @@ impl Immortal {
     pub fn register(&mut self, method: &str, route: &str, func: Handler) -> bool {
         self.router.register(method, route, func)
     }
-
     pub fn unregister(&mut self, method: &str, route: &str) -> bool {
         self.router.unregister(method, route)
+    }
+
+    /**
+     * Registers the fallback function for no method/route match requests
+     */
+    pub fn fallback(&mut self, func: Handler) {
+        self.router.fallback = func;
     }
 
 }

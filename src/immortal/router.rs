@@ -5,7 +5,7 @@ use super::ImmortalContext;
 pub type Handler = fn(&mut ImmortalContext);
 
 pub struct Router {
-    fallback: Handler,
+    pub fallback: Handler,
     routes: HashMap<String, HashMap<String, Handler>>,
 }
 

@@ -52,7 +52,12 @@ impl SessionManager {
 
     pub fn write_session(&mut self, session_id: &str, key: &str, value: &str) -> bool {
         if let Some(session) = self.store.get_mut(session_id) {
-            session.data.insert(key.to_owned(), value.to_owned());
+            if value.is_empty() {
+                session.data.remove(key);
+                session.data.shrink_to_fit();
+            } else {
+                session.data.insert(key.to_owned(), value.to_owned());
+            }
             return true;
         }
         false
