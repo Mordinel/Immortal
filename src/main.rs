@@ -3,6 +3,7 @@ use crate::immortal::Immortal;
 mod immortal;
 
 fn main() {
+
     let socket_str = "127.0.0.1:7777";
 
     let mut immortal = match Immortal::new(socket_str) {
@@ -21,6 +22,7 @@ fn main() {
                 ctx.response.body.append(&mut b"<p>Click <a href=\"/login\">HERE</a> to go to the login page</p>".to_vec());
             },
             Some(username) => {
+                let username = ctx.html_escape(&username);
                 ctx.response.body.append(&mut format!("<h1>Welcome to the website, {username}!</h1>").as_bytes().to_vec());
                 ctx.response.body.append(&mut b"<p>Click <a href=\"/logout\">HERE</a> to log out</p>".to_vec());
             },

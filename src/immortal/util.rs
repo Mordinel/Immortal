@@ -79,6 +79,7 @@ pub fn url_decode(to_decode: &str) -> Result<String, Utf8Error> {
                     },
                 };
             },
+            b'+' => build.push(b' '),
             b'\0' => break,
             other => build.push(other),
         }
