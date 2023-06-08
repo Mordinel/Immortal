@@ -3,9 +3,7 @@ use std::str;
 use std::str::Utf8Error;
 use std::collections::HashMap;
 
-/**
- * Performs html escaping on str
- */
+/// Performs html escaping on str
 pub fn escape_html(str: &str) -> String {
     let mut out = String::new();
     for ch in str.chars() {
@@ -22,18 +20,14 @@ pub fn escape_html(str: &str) -> String {
     out
 }
 
-/**
- * Accept a string, filter out the terminal control chars and return the clean string
- */
+/// Accept a string, filter out the terminal control chars and return the clean string
 pub fn strip_for_terminal(to_strip: &str) -> String {
     to_strip.chars()
         .filter(|chr| !matches!(chr, '\x07'..='\x0D'))
         .collect::<String>()
 }
 
-/**
- * Accept a byte encoding a hex value and decompose it into its half-byte binary form
- */
+/// Accept a byte encoding a hex value and decompose it into its half-byte binary form
 fn from_hex(byte: u8) -> Option<u8> {
     match byte {
         b'a'..=b'f' => Some(byte - b'a' + 10),
@@ -43,9 +37,7 @@ fn from_hex(byte: u8) -> Option<u8> {
     }
 }
 
-/**
- * Accept a string, perform URL decoding on the string and return the result
- */
+/// Accept a string, perform URL decoding on the string and return the result
 pub fn url_decode(to_decode: &str) -> Result<String, Utf8Error> {
     let mut build: Vec<u8> = Vec::with_capacity(to_decode.len());
     let mut bytes = to_decode.bytes();
@@ -89,9 +81,7 @@ pub fn url_decode(to_decode: &str) -> Result<String, Utf8Error> {
     Ok(str::from_utf8(&build)?.to_string())
 }
 
-/**
- * Parses an HTTP query string into a key-value hashmap
- */
+/// Parses an HTTP query string into a key-value hashmap
 pub fn parse_parameters(to_parse: &str) -> HashMap<String, String> {
     if to_parse.is_empty() {
         return HashMap::new();
@@ -165,10 +155,8 @@ pub fn parse_parameters(to_parse: &str) -> HashMap<String, String> {
     params
 }
 
-/**
- * Accepts a slice containing unparsed headers straight from the request recieve buffer, split and
- * parse these into a hashmap of key-value pairs where keys have all ascii values as uppercase.
- */
+/// Accepts a slice containing unparsed headers straight from the request recieve buffer, split and
+/// parse these into a hashmap of key-value pairs where keys have all ascii values as uppercase.
 pub fn parse_headers(to_parse: &[u8]) -> Result<HashMap<String, String>, Utf8Error> {
     let to_parse = str::from_utf8(to_parse)?;
     //let to_parse = match str::from_utf8(to_parse) {
@@ -210,10 +198,8 @@ pub fn parse_headers(to_parse: &[u8]) -> Result<HashMap<String, String>, Utf8Err
     Ok(headers)
 }
 
-/**
- * Accepts a string which is assumed to be a param name.
- * Returns true if it's valid, valse if it's not valid.
- */
+/// Accepts a string which is assumed to be a param name.
+/// Returns true if it's valid, valse if it's not valid.
 pub fn is_param_name_valid(param: &str) -> bool {
     if param.is_empty() { return false }
 
@@ -233,13 +219,11 @@ pub fn is_param_name_valid(param: &str) -> bool {
     true
 }
 
-/**
- * Find the index of the first item `by`, and return a tuple of two mutable string slices, the
- * first being the slice content up to the first instance of item `by`, and the second being the
- * slice content after the first instance of `by`.
- *
- * This exists because there is no split_once in a slice, only for strings
- */
+/// Find the index of the first item `by`, and return a tuple of two mutable string slices, the
+/// first being the slice content up to the first instance of item `by`, and the second being the
+/// slice content after the first instance of `by`.
+/// 
+/// This exists because there is no split_once in a slice, only for strings
 pub fn split_once(to_split: &[u8], by: u8) -> (&[u8], Option<&[u8]>) {
     let mut found_idx = 0;
 

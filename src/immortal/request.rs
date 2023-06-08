@@ -14,6 +14,8 @@ use super::{
 
 pub type Cookies = HashMap<String, Cookie>;
 
+/// Request contains the request representation that is serialised from the main HTTP request from
+/// the socket.
 #[derive(Debug)]
 pub struct Request {
     pub body: Vec<u8>,
@@ -87,10 +89,9 @@ impl PartialEq for Request {
     }
 }
 
+#[allow(dead_code)]
 impl Request {
-    /**
-     * Construct a new request object, parsing the request buffer
-     */
+    /// Construct a new request object, parsing the request buffer
     pub fn new(buf: &mut [u8]) -> Result<Self> {
         // parse body
         let (request_head, request_body) = request_head_body_split(buf);
@@ -205,7 +206,8 @@ impl Request {
             keep_alive,
         })
     }
-
+    
+    /// looks up HTTP headers in the internal hashmap and returns its value
     pub fn header(&self, key: &str) -> Option<&str> {
         match self.headers.get(&key.to_ascii_uppercase()) {
             None => None,
@@ -213,10 +215,12 @@ impl Request {
         }
     }
 
+    /// looks up cookies keys and returns its value
     pub fn cookie(&self, key: &str) -> Option<&Cookie> {
         self.cookies.get(key)
     }
 
+    /// looks up get parameters and returns its value
     pub fn get(&self, key: &str) -> Option<&str> {
         match self.get.get(key) {
             None => None,
@@ -224,6 +228,7 @@ impl Request {
         }
     }
 
+    /// looks up post parameters and returns its value
     pub fn post(&self, key: &str) -> Option<&str> {
         match self.post.get(key) {
             None => None,
@@ -232,9 +237,7 @@ impl Request {
     }
 }
 
-/**
- * Returns a hashmap of http cookies with the name value as the key
- */
+/// Returns a hashmap of http cookies with the name value as the key
 fn get_cookies(cookies_raw: &str) -> HashMap<String, Cookie> {
     let mut cookies = HashMap::new();
 
@@ -246,10 +249,8 @@ fn get_cookies(cookies_raw: &str) -> HashMap<String, Cookie> {
     cookies
 }
 
-/**
- * Accepts a hashmap and a key, returns the key value or an empty string
- * [[[ASSUMES `key` IS A VALID NON EMPTY HEADER KEY]]]: handling errors from this will be annoying.
- */
+/// Accepts a hashmap and a key, returns the key value or an empty string
+/// [[[ASSUMES `key` IS A VALID NON EMPTY HEADER KEY]]]: handling errors from this will be annoying.
 fn collect_header(headers: &HashMap<String, String>, key: &str) -> String {
     let key = key.to_ascii_uppercase();
     match headers.get(&key) {
@@ -258,11 +259,9 @@ fn collect_header(headers: &HashMap<String, String>, key: &str) -> String {
     }
 }
 
-/**
- * Find the index of the first crlf and return a tuple of two mutable string slices, the first
- * being the buffer slice up to the crlf, and the second being the slice content after the
- * clrf
- */
+/// Find the index of the first crlf and return a tuple of two mutable string slices, the first
+/// being the buffer slice up to the crlf, and the second being the slice content after the
+/// clrf
 fn request_line_header_split(to_split: &[u8]) -> (&[u8], Option<&[u8]>) {
     let mut found_cr = false;
     let mut found_lf = false;
@@ -298,11 +297,9 @@ fn request_line_header_split(to_split: &[u8]) -> (&[u8], Option<&[u8]>) {
     (req_line, Some(req_headers))
 }
 
-/**
- * Find the index of the first double crlf and return a tuple of two mutable string slices, the
- * first being the slice content up to the double crlf, and the second being being the slice 
- * content after the double clrf
- */
+/// Find the index of the first double crlf and return a tuple of two mutable string slices, the
+/// first being the slice content up to the double crlf, and the second being being the slice 
+/// content after the double clrf
 fn request_head_body_split(to_split: &[u8]) -> (&[u8], Option<&[u8]>)  {
     let mut found_cr = false;
     let mut crlf_count = 0;

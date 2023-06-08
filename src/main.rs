@@ -67,7 +67,7 @@ fn main() {
         if ctx.request.post("username").is_some() && ctx.request.post("password").is_some() {
             let username = ctx.request.post("username").unwrap();
             let password = ctx.request.post("password").unwrap();
-            if /*username == "admin" &&*/ password == "lemon42" {
+            if /*username == "admin" &&*/ password == "lemon42" { // could do a DB lookup here
                 ctx.write_session(&ctx.request.session_id, "username", username);
                 ctx.response.headers.insert("Location", "/".to_string());
                 return;

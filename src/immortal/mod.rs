@@ -28,6 +28,7 @@ pub use crate::immortal::{
     util::strip_for_terminal,
 };
 
+/// Prints access logs in the same format as Nginx access logs
 fn log(stream: &TcpStream, req: &Request, resp: &Response) {
     let remote_socket = match stream.peer_addr() {
         Err(_) => "<no socket>".to_string(),
@@ -56,9 +57,7 @@ fn log(stream: &TcpStream, req: &Request, resp: &Response) {
              strip_for_terminal(user_agent));
 }
 
-/**
- * Reads the TcpStream and handles errors while reading
- */
+/// Reads the TcpStream and handles errors while reading
 fn handle_connection(mut stream: TcpStream, session_manager: &SessionManagerMtx, router: &Router) {
     let mut buf: [u8; 4096] = [0; 4096];
     loop {
@@ -118,6 +117,9 @@ fn handle_connection(mut stream: TcpStream, session_manager: &SessionManagerMtx,
 }
 
 pub type SessionManagerMtx = Arc<Mutex<SessionManager>>;
+
+/// Immortal provides the socket and threading configuration, as well as the routing API to program
+/// against.
 pub struct Immortal {
     listener: TcpListener,
     thread_pool: Pool,
@@ -125,10 +127,9 @@ pub struct Immortal {
     session_manager: SessionManagerMtx,
 }
 
+#[allow(dead_code)]
 impl Immortal {
-    /**
-     * Construct a new Immortal server or returns an error
-     */
+    /// Construct a new Immortal server or returns an error
     pub fn new(socket_str: &str) -> Result<Self> {
         let listener = TcpListener::bind(socket_str)?;
 
@@ -140,9 +141,7 @@ impl Immortal {
         })
     }
 
-    /**
-     * Listens for incoming connections and sends them to handle_connection
-     */
+    /// Listens for incoming connections and sends them to handle_connection
     pub fn listen(&self) -> Result<()> {
         match self.listener.local_addr() {
             Err(e) => return Err(anyhow!(e)),
@@ -164,23 +163,22 @@ impl Immortal {
         Ok(())
     }
 
-    /**
-     * Calls into the router to register a function
-     * Returns true if a route was registered
-     */
+    /// Calls into the router to register a function
+    /// Returns true if a route was registered
     pub fn register(&mut self, method: &str, route: &str, func: Handler) -> bool {
         self.router.register(method, route, func)
     }
+
+    /// Calls into the router to unregister a function
+    /// Returns true if a route was unregistered
     pub fn unregister(&mut self, method: &str, route: &str) -> bool {
         self.router.unregister(method, route)
     }
 
-    /**
-     * Registers the fallback function for no method/route match requests
-     */
+    /// Registers the fallback function for no method/route match requests, or for if your
+    /// implementation handles this.
     pub fn fallback(&mut self, func: Handler) {
         self.router.fallback = func;
     }
-
 }
 

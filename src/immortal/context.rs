@@ -6,12 +6,15 @@ use super::{
     SessionManagerMtx,
 };
 
+/// ImmortalContext is a structure that is exposed to the programmer when registering closures as
+/// request handlers.
 pub struct ImmortalContext<'a, 'b> {
     pub request: &'a Request,
     pub response: &'a mut Response<'b>,
     session_manager: &'a SessionManagerMtx,
 }
 
+#[allow(dead_code)]
 impl<'a, 'b> ImmortalContext<'a, 'b> {
     pub fn new(request: &'a Request,
                response: &'a mut Response<'b>, 
@@ -23,11 +26,10 @@ impl<'a, 'b> ImmortalContext<'a, 'b> {
         }
     }
 
-    /**
-     * Makes a write to a session with a key and value
-     * Returns true if a write happened to a session, false if no session id exists
-     * Writing an empty string to this will remove the item from the session storage
-     */
+    
+    /// Makes a write to a session with a key and value
+    /// Returns true if a write happened to a session, false if no session id exists
+    /// Writing an empty string to this will remove the item from the session storage
     pub fn write_session(&mut self, session_id: &str, key: &str, value: &str) -> bool {
         match self.session_manager.lock() {
             Err(_) => false,
@@ -37,10 +39,8 @@ impl<'a, 'b> ImmortalContext<'a, 'b> {
         }
     }
 
-    /**
-     * Reads from a session store, the value associated with the key
-     * Returns None if the session or the key is nonexistent
-     */
+    /// Reads from a session store, the value associated with the key
+    /// Returns None if the session or the key is nonexistent
     pub fn read_session(&self, session_id: &str, key: &str) -> Option<String> {
         match self.session_manager.lock() {
             Err(_) => None,
@@ -50,9 +50,8 @@ impl<'a, 'b> ImmortalContext<'a, 'b> {
         }
     }
 
-    /**
-     * Clears the session data of any session ID passed in Shrinks the session data hashmap accordingly
-     */
+    /// Clears the session data of any session ID passed in Shrinks the session data hashmap 
+    /// accordingly
     pub fn clear_session(&mut self, session_id: &str) {
         match self.session_manager.lock() {
             Err(_) => (),
@@ -62,10 +61,8 @@ impl<'a, 'b> ImmortalContext<'a, 'b> {
         }
     }
 
-    /**
-     * Completely deletes the session storage related to the passed-in session_id value
-     * Shrinks the session storage hashmap accordingly
-     */
+    /// Completely deletes the session storage related to the passed-in session_id value
+    /// Shrinks the session storage hashmap accordingly
     pub fn delete_session(&mut self, session_id: &str) {
         match self.session_manager.lock() {
             Err(_) => (),
@@ -75,9 +72,7 @@ impl<'a, 'b> ImmortalContext<'a, 'b> {
         }
     }
 
-    /**
-     * Returns true or false if the session associated with session_id exists
-     */
+    /// Returns true or false if the session associated with session_id exists
     pub fn session_exists(&self, session_id: &str) -> bool {
         match self.session_manager.lock() {
             Err(_) => false,
@@ -87,9 +82,7 @@ impl<'a, 'b> ImmortalContext<'a, 'b> {
         }
     }
 
-    /**
-     * Returns a copy of str with html specific characters escaped
-     */
+    /// Returns a copy of str with html specific characters escaped
     pub fn html_escape(&self, str: &str) -> String {
         escape_html(str)
     }

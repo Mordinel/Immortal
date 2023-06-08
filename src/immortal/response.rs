@@ -20,9 +20,7 @@ pub struct Response<'a> {
 }
 
 impl Response<'_> {
-    /**
-     *  Constructs a default response based on the passed request.
-     */
+    /// Constructs a default response based on the passed request.
     pub fn new(req: &mut Request, session_manager: &SessionManagerMtx) -> Self {
         let mut headers: HashMap<&str, String> = HashMap::new();
         let now: DateTime<Utc> = Utc::now();
@@ -62,9 +60,7 @@ impl Response<'_> {
         }
     }
 
-    /**
-     * Constructs a default error response
-     */
+    /// Constructs a default error response
     pub fn bad() -> Self {
         let mut headers: HashMap<&str, String> = HashMap::new();
         let now: DateTime<Utc> = Utc::now();
@@ -85,9 +81,7 @@ impl Response<'_> {
         }
     }
 
-    /**
-     * Generates the serial data for an HTTP response using the object internal state
-     */
+    /// Generates the serial data for an HTTP response using the object internal state
     pub fn serialize(&mut self) -> Vec<u8> {
         let mut serialized = vec![];
         let statuses: HashMap<String, String> = HashMap::from([ // TODO: Make this static
@@ -153,6 +147,7 @@ impl Response<'_> {
         serialized
     }
 
+    /// looks up headers and returns it
     pub fn header(&self, key: &str) -> Option<&str> {
         match self.headers.get(key) {
             None => None,

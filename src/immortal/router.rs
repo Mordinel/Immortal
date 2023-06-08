@@ -4,6 +4,7 @@ use super::ImmortalContext;
 
 pub type Handler = fn(&mut ImmortalContext);
 
+/// provides an API to register and lookup HTTP routes
 pub struct Router {
     pub fallback: Handler,
     routes: HashMap<String, HashMap<String, Handler>>,
@@ -21,6 +22,7 @@ impl Default for Router {
 }
 
 impl Router {
+    /// Creates a new router
     pub fn new() -> Self {
         Self {
             fallback: not_implemented,
@@ -28,6 +30,8 @@ impl Router {
         }
     }
 
+    /// register a path with a function callback
+    /// if a request document path matches the callback path, the callback is fired.
     pub fn register(&mut self, method: &str, route: &str, func: Handler) -> bool {
         if !self.routes.contains_key(method) {
             self.routes.insert(method.to_string(), HashMap::new());
@@ -39,6 +43,7 @@ impl Router {
         true
     }
 
+    /// removes a registered path
     pub fn unregister(&mut self, method: &str, route: &str) -> bool {
         match self.routes.get_mut(method) {
             None => false,
@@ -48,6 +53,8 @@ impl Router {
         }
     }
 
+    /// tries to call a registered path
+    /// if it fails, the fallback is automatically called
     pub fn call(
         &self,
         method: &str,

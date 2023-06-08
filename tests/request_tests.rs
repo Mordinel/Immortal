@@ -1,20 +1,3 @@
-/**
-*     Copyright (C) 2022 Mason Soroka-Gill
-*
-*     This program is free software: you can redistribute it and/or modify
-*     it under the terms of the GNU General Public License as published by
-*     the Free Software Foundation, either version 3 of the License, or
-*     (at your option) any later version.
-*
-*     This program is distributed in the hope that it will be useful,
-*     but WITHOUT ANY WARRANTY; without even the implied warranty of
-*     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-*     GNU General Public License for more details.
-*
-*     You should have received a copy of the GNU General Public License
-*     along with this program.  If not, see <https://www.gnu.org/licenses/>.
-*/
-
 #[cfg(test)]
 mod tests {
 
@@ -22,7 +5,6 @@ mod tests {
     use std::io::ErrorKind;
     use std::str::Utf8Error;
     use immortal::immortal::*;
-    use immortal::{Cookie, SameSite};
 
     #[test]
     fn test_request() {
@@ -96,7 +78,7 @@ mod tests {
         let mut buffer = b"".to_vec();
         buffer.append(&mut b"GET / HTTP/1.1\r\n".to_vec());
         buffer.append(&mut b"Host: 127.0.0.1\r\n".to_vec());
-        buffer.append(&mut b"Cookie: id=9001; Secure; HttpOnly; SameSite=Lax; other_cookie=cookie_value; HttpOnly; SameSite=Strict; Domain=127.0.0.1; Path=/; last-cookie=short-lived; Max-Age=10;\r\n".to_vec());
+        buffer.append(&mut b"Cookie: id=9001; other_cookie=cookie_value; last-cookie=short-lived; \r\n".to_vec());
         buffer.append(&mut b"Connection: close\r\n".to_vec());
         buffer.append(&mut b"\r\n".to_vec());
         let request = Request::new(buffer.as_mut_slice()).unwrap();
@@ -106,22 +88,8 @@ mod tests {
         let cookie_c = request.cookie("last-cookie").unwrap();
 
         assert_eq!(cookie_a.value, "9001");
-        assert_eq!(cookie_a.secure, true);
-        assert_eq!(cookie_a.http_only, true);
-        assert_eq!(cookie_a.same_site, SameSite::Lax);
-
         assert_eq!(cookie_b.value, "cookie_value");
-        assert_eq!(cookie_b.secure, false);
-        assert_eq!(cookie_b.http_only, true);
-        assert_eq!(cookie_b.same_site, SameSite::Strict);
-        assert_eq!(cookie_b.domain, "127.0.0.1");
-        assert_eq!(cookie_b.path, "/");
-
         assert_eq!(cookie_c.value, "short-lived");
-        assert_eq!(cookie_c.secure, false);
-        assert_eq!(cookie_c.http_only, false);
-        assert_eq!(cookie_c.same_site, SameSite::Undefined);
-        assert_eq!(cookie_c.max_age, 10i64);
     }
 
     #[test]

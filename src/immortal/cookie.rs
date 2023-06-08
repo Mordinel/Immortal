@@ -1,6 +1,7 @@
 
 use crate::immortal::util::is_param_name_valid;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SameSite {
     Undefined,
@@ -9,6 +10,8 @@ pub enum SameSite {
     Strict,
 }
 
+/// Cookies are a high-level representation used for serialisation and deserialisation of browser
+/// cookies.
 #[derive(Debug, Clone)]
 pub struct Cookie {
     pub name: String,
@@ -69,6 +72,7 @@ impl Cookie {
         }
     }
     
+    /// Exposes the builder pattern
     pub fn builder() -> CookieBuilder {
         CookieBuilder::new()
     }
@@ -79,6 +83,7 @@ pub struct CookieBuilder {
     cookie: Cookie,
 }
 
+#[allow(dead_code)]
 impl CookieBuilder {
     pub fn new() -> Self {
         Self {
@@ -135,16 +140,9 @@ impl CookieBuilder {
 enum ParseState {
     Name,
     Value,
-    SameSite,
-    Domain,
-    Path,
-    Expires,
-    MaxAge,
 }
 
-/**
- * Performs the state transition for the cookie parser
- */
+/// Performs the state transition for the cookie parser
 fn parse_cookies_state_transition(state: &mut ParseState, cookies: &mut Vec<Cookie>, cookie: &mut Cookie, builder: &mut String, component: &str) {
     for c in component.trim().chars() {
         match c {
@@ -152,29 +150,17 @@ fn parse_cookies_state_transition(state: &mut ParseState, cookies: &mut Vec<Cook
                 if *state == ParseState::Name {
                     *builder = builder.trim().to_string();
                     if !builder.is_empty() && is_param_name_valid(builder) {
-                        if builder == "SameSite" {
-                            *state = ParseState::SameSite;
-                        } else if builder == "Domain" {
-                            *state = ParseState::Domain;
-                        } else if builder == "Path" {
-                            *state = ParseState::Path;
-                        } else if builder == "Expires" {
-                            *state = ParseState::Expires;
-                        } else if builder == "Max-Age" {
-                            *state = ParseState::MaxAge;
-                        } else {
-                            // end the current cookie and start a new one
-                            if !cookie.name.is_empty() && !cookie.value.is_empty() {
-                                cookies.push(cookie.clone());
-                                *cookie = Cookie::new();
-                            }
-
-                            cookie.name = builder.clone();
-                            *state = ParseState::Value;
+                        // end the current cookie and start a new one
+                        if !cookie.name.is_empty() && !cookie.value.is_empty() {
+                            cookies.push(cookie.clone());
+                            *cookie = Cookie::new();
                         }
+
+                        cookie.name = builder.clone();
+                        *state = ParseState::Value;
                         builder.clear();
                     }
-                } else if *state == ParseState::Value {
+                } else {
                     builder.push(c);
                 }
             }
@@ -183,45 +169,14 @@ fn parse_cookies_state_transition(state: &mut ParseState, cookies: &mut Vec<Cook
     }
 }
 
-/**
- * Performs the state action for the cookie parser
- */
+/// Performs the state action for the cookie parser
 fn parse_cookies_state_action(state: &mut ParseState, cookie: &mut Cookie, builder: &mut String) {
     *builder = builder.trim().to_string();
     match state {
         // should be name if no '=' was encountered
-        ParseState::Name => {
-            if builder == "Secure" {
-                cookie.secure = true;
-            } else if builder == "HttpOnly" {
-                cookie.http_only = true;
-            }
-        },
+        ParseState::Name => { },
         ParseState::Value => {
             cookie.value = builder.replace(['"', '\\', ',', '\t', '\r', '\n', '\0'], "");
-        },
-        ParseState::SameSite => {
-            if builder == "Strict" {
-                cookie.same_site = SameSite::Strict;
-            } else if builder == "Lax" {
-                cookie.same_site = SameSite::Lax;
-            } else if builder == "None" {
-                cookie.same_site = SameSite::No;
-            } else {
-                cookie.same_site = SameSite::Undefined;
-            }
-        },
-        ParseState::Domain => {
-            cookie.domain = builder.clone();
-        },
-        ParseState::Path => {
-            cookie.path = builder.clone();
-        },
-        ParseState::Expires => {
-            // more trouble than its worth parsing, use Max-Age instead
-        },
-        ParseState::MaxAge => {
-            cookie.max_age = builder.parse::<i64>().unwrap_or(-1i64);
         },
     };
 
@@ -229,9 +184,9 @@ fn parse_cookies_state_action(state: &mut ParseState, cookie: &mut Cookie, build
     builder.clear();
 }
 
-/**
- * Take a string containing arbitrary HTTP cookies and parse them into Cookie structs
- */
+/// Take a string containing arbitrary HTTP cookies and parse them into Cookie structs
+/// note: cookies parsed this way will only have their name and value members filled out, as 
+/// browsers do not echo the other components of the cookie in requests.
 pub fn parse_cookies(raw_cookies: &str) -> Vec<Cookie> {
     if raw_cookies.is_empty() { return Vec::new() }
 
