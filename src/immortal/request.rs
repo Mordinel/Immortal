@@ -92,7 +92,7 @@ impl PartialEq for Request {
 #[allow(dead_code)]
 impl Request {
     /// Construct a new request object, parsing the request buffer
-    pub fn new(buf: &mut [u8]) -> Result<Self> {
+    pub fn new(buf: &[u8]) -> Result<Self> {
         // parse body
         let (request_head, request_body) = request_head_body_split(buf);
 

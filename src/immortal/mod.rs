@@ -10,6 +10,7 @@ use scoped_thread_pool::Pool;
 
 pub mod response;
 pub mod request;
+pub mod middleware;
 pub mod router;
 pub mod util;
 pub mod cookie;
@@ -19,10 +20,8 @@ pub mod context;
 pub use crate::immortal::{
     request::Request,
     response::Response,
-    router::{
-        Router,
-        Handler,
-    },
+    middleware::Middleware,
+    router::{Router, Handler},
     session::SessionManager,
     context::ImmortalContext,
     util::strip_for_terminal,
@@ -58,7 +57,12 @@ fn log(stream: &TcpStream, req: &Request, resp: &Response) {
 }
 
 /// Reads the TcpStream and handles errors while reading
-fn handle_connection(mut stream: TcpStream, session_manager: &SessionManagerMtx, router: &Router) {
+fn handle_connection(
+    mut stream: TcpStream,
+    session_manager: &SessionManagerMtx,
+    middleware: &Middleware,
+    router: &Router) {
+
     let mut buf: [u8; 4096] = [0; 4096];
     loop {
         buf.fill(0u8);
@@ -96,9 +100,10 @@ fn handle_connection(mut stream: TcpStream, session_manager: &SessionManagerMtx,
                 };
 
                 let mut response = Response::new(&mut request, session_manager);
+                let mut ctx = ImmortalContext::new(&request, &mut response, session_manager);
 
-                let ctx = ImmortalContext::new(&request, &mut response, session_manager);
-                router.call(&request.method, ctx);
+                middleware.run(&mut ctx);
+                router.call(&request.method, &mut ctx);
 
                 log(&stream, &request, &response);
 
@@ -123,6 +128,7 @@ pub type SessionManagerMtx = Arc<Mutex<SessionManager>>;
 pub struct Immortal {
     listener: TcpListener,
     thread_pool: Pool,
+    middleware: Middleware,
     router: Router,
     session_manager: SessionManagerMtx,
 }
@@ -136,6 +142,7 @@ impl Immortal {
         Ok(Self {
             listener,
             thread_pool: Pool::new(thread::available_parallelism()?.get()),
+            middleware: Middleware::new(),
             router: Router::new(),
             session_manager: Arc::new(Mutex::new(SessionManager::new())),
         })
@@ -153,7 +160,7 @@ impl Immortal {
                 match stream {
                     Err(e) => return Err(anyhow!(e)),
                     Ok(stream) => scope.execute(|| {
-                        handle_connection(stream, &self.session_manager, &self.router)
+                        handle_connection(stream, &self.session_manager, &self.middleware, &self.router)
                     }),
                 };
             }
@@ -161,6 +168,26 @@ impl Immortal {
         })?;
 
         Ok(())
+    }
+
+    pub fn process_buffer(&mut self, request_buffer: &[u8]) -> Vec<u8> {
+        let mut request = match Request::new(request_buffer) {
+            Err(_) => return Response::bad().serialize(),
+            Ok(req) => req,
+        };
+
+        let mut response = Response::new(&mut request, &self.session_manager);
+        let mut ctx = ImmortalContext::new(&request, &mut response, &self.session_manager);
+
+        self.middleware.run(&mut ctx);
+        self.router.call(&request.method, &mut ctx);
+
+        response.serialize()
+    }
+
+    /// Adds middleware that gets executed just before the router.
+    pub fn add_middleware(&mut self, func: Handler) {
+        self.middleware.push(func);
     }
 
     /// Calls into the router to register a function

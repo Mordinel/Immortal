@@ -58,22 +58,22 @@ impl Router {
     pub fn call(
         &self,
         method: &str,
-        mut ctx: ImmortalContext) {
+        ctx: &mut ImmortalContext) {
         let by_method = match self.routes.get(method) {
             None => {
-                (self.fallback)(&mut ctx);
+                (self.fallback)(ctx);
                 return;
             },
             Some(inner) => inner,
         };
         let func = match by_method.get(&ctx.request.document) {
             None => {
-                (self.fallback)(&mut ctx);
+                (self.fallback)(ctx);
                 return;
             },
             Some(inner) => inner,
         };
-        func(&mut ctx);
+        func(ctx);
     }
 }
 
