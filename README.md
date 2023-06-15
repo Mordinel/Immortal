@@ -3,7 +3,7 @@
 ## Example usage:
 
 ```rust
-use immortal-http::Immortal;
+use immortal_http::Immortal;
 
 fn main() {
     let mut immortal = Immortal::new();
