@@ -132,7 +132,7 @@ pub struct Immortal {
 
 #[allow(dead_code)]
 impl Immortal {
-    /// Construct a new Immortal server or returns an error
+    /// Construct a new Immortal server
     pub fn new() -> Self {
         Self {
             middleware: Middleware::new(),
