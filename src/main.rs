@@ -3,13 +3,7 @@ use crate::immortal::Immortal;
 mod immortal;
 
 fn main() {
-
-    let socket_str = "127.0.0.1:7777";
-
-    let mut immortal = match Immortal::new(socket_str) {
-        Err(e) => panic!("{}", e),
-        Ok(i) => i,
-    };
+    let mut immortal = Immortal::new();
 
     immortal.add_middleware(|ctx| {
         ctx.response.headers.insert("X-Frame-Options", "deny".to_string());
@@ -97,7 +91,7 @@ fn main() {
         }
     });
 
-    if let Err(e) = immortal.listen() {
+    if let Err(e) = immortal.listen("127.0.0.1:7777") {
         panic!("{}", e);
     }
 }

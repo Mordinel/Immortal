@@ -123,11 +123,8 @@ fn handle_connection(
 
 pub type SessionManagerMtx = Arc<Mutex<SessionManager>>;
 
-/// Immortal provides the socket and threading configuration, as well as the routing API to program
-/// against.
+/// Immortal middleware and routing configuration, as well as the session manager.
 pub struct Immortal {
-    listener: TcpListener,
-    thread_pool: Pool,
     middleware: Middleware,
     router: Router,
     session_manager: SessionManagerMtx,
@@ -136,27 +133,27 @@ pub struct Immortal {
 #[allow(dead_code)]
 impl Immortal {
     /// Construct a new Immortal server or returns an error
-    pub fn new(socket_str: &str) -> Result<Self> {
-        let listener = TcpListener::bind(socket_str)?;
-
-        Ok(Self {
-            listener,
-            thread_pool: Pool::new(thread::available_parallelism()?.get()),
+    pub fn new() -> Self {
+        Self {
             middleware: Middleware::new(),
             router: Router::new(),
             session_manager: Arc::new(Mutex::new(SessionManager::new())),
-        })
+        }
     }
 
     /// Listens for incoming connections and sends them to handle_connection
-    pub fn listen(&self) -> Result<()> {
-        match self.listener.local_addr() {
+    pub fn listen(&self, socket_str: &str) -> Result<()> {
+        let listener = TcpListener::bind(socket_str)?;
+
+        match listener.local_addr() {
             Err(e) => return Err(anyhow!(e)),
             Ok(socket) => println!("Server starting at: http://{}", socket),
         };
 
-        self.thread_pool.scoped(|scope| {
-            for stream in self.listener.incoming() {
+        let thread_pool = Pool::new(thread::available_parallelism()?.get());
+
+        thread_pool.scoped(|scope| {
+            for stream in listener.incoming() {
                 match stream {
                     Err(e) => return Err(anyhow!(e)),
                     Ok(stream) => scope.execute(|| {
