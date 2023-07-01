@@ -1,9 +1,11 @@
-#![feature(iter_intersperse)]
-use crate::immortal::Immortal;
-mod immortal;
+use immortal_http::*;
 
 fn main() {
     let mut immortal = Immortal::new();
+
+    immortal.fallback(|ctx| {
+        ctx.response.code = "404";
+    });
 
     immortal.add_middleware(|ctx| {
         ctx.response.headers.insert("X-Frame-Options", "deny".to_string());
@@ -12,28 +14,36 @@ fn main() {
         ctx.response.headers.insert("Referrer-Policy", "no-referrer".to_string());
     });
 
-    immortal.fallback(|ctx| {
-        ctx.response.code = "404";
+    immortal.add_middleware(|ctx| {
+        match ctx.request.document.as_str() {
+            "/" | "/login" | "/favicon.ico" => return,
+            _ => {},
+        }
+
+        if !is_logged_in(ctx) {
+            set_message(ctx, "Must log in to access resources");
+            ctx.redirect("/login");
+        }
     });
 
     immortal.register("GET", "/", |ctx| {
-        match ctx.read_session(&ctx.request.session_id, "username") {
+        match get_username(ctx) {
             None=> {
                 ctx.response.body.append(&mut b"<h1>Welcome to the website!</h1>".to_vec());
                 ctx.response.body.append(&mut b"<p>Click <a href=\"/login\">HERE</a> to go to the login page</p>".to_vec());
             },
             Some(username) => {
-                let username = ctx.html_escape(&username);
+                let username = util::escape_html(&username);
                 ctx.response.body.append(&mut format!("<h1>Welcome to the website, {username}!</h1>").as_bytes().to_vec());
                 ctx.response.body.append(&mut b"<p>Click <a href=\"/logout\">HERE</a> to log out</p>".to_vec());
+                ctx.response.body.append(&mut b"<p>Click <a href=\"/secret\">HERE</a> to see the secret</p>".to_vec());
             },
         };
     });
 
     immortal.register("GET", "/login", |ctx| {
-        if ctx.read_session(&ctx.request.session_id, "username").is_some() {
-            ctx.response.code = "302";
-            ctx.response.headers.insert("Location", String::from("/"));
+        if is_logged_in(ctx) {
+            ctx.redirect("/");
             return;
         }
 
@@ -47,21 +57,20 @@ fn main() {
 </form>".to_vec()
         );
 
-        match ctx.read_session(&ctx.request.session_id, "message") {
+        match get_message(ctx) {
             None => {},
             Some(message) => {
                 ctx.response.body.append(
-                    &mut format!("<br><p>{}</p>", ctx.html_escape(&message)).as_bytes().to_vec()
+                    &mut format!("<br><p>{}</p>", util::escape_html(&message)).as_bytes().to_vec()
                 );
-                ctx.write_session(&ctx.request.session_id, "message", "");
+                clear_message(ctx);
             },
         };
     });
 
     immortal.register("POST", "/login", |ctx| {
-        ctx.response.code = "302";
-        if ctx.read_session(&ctx.request.session_id, "username").is_some() {
-            ctx.response.headers.insert("Location", "/".to_string());
+        if is_logged_in(ctx) {
+            ctx.redirect("/");
             return;
         }
 
@@ -69,29 +78,60 @@ fn main() {
             let username = ctx.request.post("username").unwrap();
             let password = ctx.request.post("password").unwrap();
             if /*username == "admin" &&*/ password == "lemon42" { // could do a DB lookup here
-                ctx.write_session(&ctx.request.session_id, "username", username);
-                ctx.response.headers.insert("Location", "/".to_string());
+                log_in(ctx, username);
+                ctx.redirect("/");
                 return;
             }
         }
 
-        ctx.write_session(&ctx.request.session_id, "message", "Failed to log in");
-        ctx.response.headers.insert("Location", "/login".to_string());
+        set_message(ctx, "Failed to log in");
+        ctx.redirect("/login");
     });
 
     immortal.register("GET", "/logout", |ctx| {
-        ctx.response.code = "302";
-        ctx.response.headers.insert("Location", "/login".to_string());
-
-        if ctx.read_session(&ctx.request.session_id, "username").is_some() {
-            ctx.write_session(&ctx.request.session_id, "username", "");
-            ctx.write_session(&ctx.request.session_id, "message", "Logged out");
+        if is_logged_in(ctx) {
+            log_out(ctx);
+            set_message(ctx, "Logged out");
         } else {
-            ctx.write_session(&ctx.request.session_id, "message", "Not logged in");
+            set_message(ctx, "Not logged in");
         }
+        ctx.redirect("/login");
+    });
+
+    immortal.register("GET", "/secret", |ctx| {
+        ctx.response.body.append("<h1>This is the super secret page</h1>".as_bytes().to_vec().as_mut());
     });
 
     if let Err(e) = immortal.listen("127.0.0.1:7777") {
         panic!("{}", e);
     }
 }
+
+fn get_username(ctx: &mut ImmortalContext) -> Option<String> {
+    ctx.read_session(&ctx.request.session_id, "username")
+}
+
+fn log_out(ctx: &mut ImmortalContext) {
+    ctx.write_session(&ctx.request.session_id, "username", "");
+}
+
+fn log_in(ctx: &mut ImmortalContext, username: &str) {
+    ctx.write_session(&ctx.request.session_id, "username", username);
+}
+
+fn get_message(ctx: &mut ImmortalContext) -> Option<String> {
+    ctx.read_session(&ctx.request.session_id, "message")
+}
+
+fn set_message(ctx: &mut ImmortalContext, message: &str) {
+    ctx.write_session(&ctx.request.session_id, "message", message);
+}
+
+fn clear_message(ctx: &mut ImmortalContext) {
+    set_message(ctx, "");
+}
+
+fn is_logged_in(ctx: &mut ImmortalContext) -> bool {
+    get_username(ctx).is_some()
+}
+

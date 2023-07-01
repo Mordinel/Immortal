@@ -26,7 +26,6 @@ impl<'a, 'b> ImmortalContext<'a, 'b> {
         }
     }
 
-    
     /// Makes a write to a session with a key and value
     /// Returns true if a write happened to a session, false if no session id exists
     /// Writing an empty string to this will remove the item from the session storage
@@ -82,8 +81,8 @@ impl<'a, 'b> ImmortalContext<'a, 'b> {
         }
     }
 
-    /// Returns a copy of str with html specific characters escaped
-    pub fn html_escape(&self, str: &str) -> String {
-        escape_html(str)
+    pub fn redirect(&mut self, location: &str) {
+        self.response.code = "302";
+        self.response.headers.insert("Location", location.to_string());
     }
 }
