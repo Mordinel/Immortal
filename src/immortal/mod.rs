@@ -183,6 +183,10 @@ impl Immortal {
     }
 
     /// Adds middleware that gets executed just before the router.
+    ///
+    /// if a middleware handler produces a redirect, all of the following middleware handlers are
+    /// skipped and the redirect is yielded, if middleware produces a redirect, the router is
+    /// bypassed and custom routes do not run. 
     pub fn add_middleware(&mut self, func: Handler) {
         self.middleware.push(func);
     }

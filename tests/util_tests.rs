@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
 
-    use immortal::{url_decode, parse_parameters, parse_headers, is_param_name_valid, split_once};
+    use immortal_http::util::*;
 
     #[test]
     fn test_url_decode_valid() {

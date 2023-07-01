@@ -4,7 +4,24 @@ mod tests {
     use std::io;
     use std::io::ErrorKind;
     use std::str::Utf8Error;
-    use immortal::immortal::*;
+    use immortal_http::*;
+
+    #[test]
+    fn test_middleware_redirects() {
+        let mut imm = Immortal::new();
+        imm.add_middleware(|ctx| {
+            ctx.response.code = "302";
+            ctx.response.headers.insert("Location", "/".to_string());
+        });
+        imm.add_middleware(|_| {
+            assert!(false);
+        });
+        imm.register("GET", "/", |_| {
+            assert!(false);
+        });
+        let request_buffer = b"GET / HTTP/1.1".to_vec();
+        imm.process_buffer(&request_buffer);
+    }
 
     #[test]
     fn test_request() {

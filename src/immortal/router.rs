@@ -1,6 +1,6 @@
 
 use std::collections::HashMap;
-use super::ImmortalContext;
+use super::{ImmortalContext, util::is_redirect};
 
 pub type Handler = fn(&mut ImmortalContext);
 
@@ -54,11 +54,12 @@ impl Router {
     }
 
     /// tries to call a registered path
-    /// if it fails, the fallback is automatically called
-    pub fn call(
-        &self,
-        method: &str,
-        ctx: &mut ImmortalContext) {
+    /// if it fails, the fallback is automatically called.
+    /// if response is already a redirect, don't call.
+    pub fn call(&self, method: &str, ctx: &mut ImmortalContext) {
+        if is_redirect(&ctx.response) {
+            return;
+        }
         let by_method = match self.routes.get(method) {
             None => {
                 (self.fallback)(ctx);

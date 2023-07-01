@@ -3,6 +3,20 @@ use std::str;
 use std::str::Utf8Error;
 use std::collections::HashMap;
 
+use super::Response;
+
+/// accepts a response and returns true if it is a redirect response
+pub fn is_redirect(response: &Response) -> bool {
+    let mut cases = 0;
+    if response.code.starts_with('3') {
+        cases += 1;
+    }
+    if response.header("Location").is_some() {
+        cases += 1;
+    }
+    cases == 2
+}
+
 /// Performs html escaping on str
 pub fn escape_html(str: &str) -> String {
     let mut out = String::new();

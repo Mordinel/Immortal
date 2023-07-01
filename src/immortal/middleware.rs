@@ -1,5 +1,5 @@
 
-use super::{Handler, ImmortalContext};
+use super::{Handler, ImmortalContext, util::is_redirect};
 
 /// Provides middleware functionality
 pub struct Middleware {
@@ -25,6 +25,9 @@ impl Middleware {
     /// Runs all the middleware on the `ctx`
     pub fn run(&self, ctx: &mut ImmortalContext) {
         for func in &self.middleware {
+            if is_redirect(&ctx.response) {
+                return;
+            }
             func(ctx);
         }
     }
