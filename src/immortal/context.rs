@@ -2,7 +2,6 @@
 use super::{
     request::Request,
     response::Response,
-    util::escape_html,
     SessionManagerMtx,
 };
 
