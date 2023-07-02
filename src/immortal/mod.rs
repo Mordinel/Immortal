@@ -82,7 +82,7 @@ fn handle_connection(
         match read_sz {
             0 => break,
             _ => {
-                let mut request = match Request::new(&mut buf) {
+                let mut request = match Request::new(&buf) {
                     Err(_) => {
                         let mut response = Response::bad();
                         match stream.write(response.serialize().as_slice()) {
@@ -125,6 +125,7 @@ fn handle_connection(
 pub type SessionManagerMtx = Arc<Mutex<SessionManager>>;
 
 /// Immortal middleware and routing configuration, as well as the session manager.
+#[derive(Default)]
 pub struct Immortal {
     middleware: Middleware,
     router: Router,

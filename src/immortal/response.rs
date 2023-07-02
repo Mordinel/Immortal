@@ -2,7 +2,7 @@
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 
-use crate::{SessionManager, ImmortalContext};
+use super::SessionManager;
 use lazy_static::lazy_static;
 
 use super::{
@@ -64,11 +64,9 @@ impl Response<'_> {
         }
 
         let mut should_add_cookie = false;
-        if !session_manager.add_session(session_id) {
-            if !session_manager.session_exists(session_id) {
-                *session_id = SessionManager::generate_id();
-                should_add_cookie = true;
-            } 
+        if !session_manager.add_session(session_id) && !session_manager.session_exists(session_id) {
+            *session_id = SessionManager::generate_id();
+            should_add_cookie = true;
         } 
 
         let mut cookies: Vec<Cookie> = Vec::new();

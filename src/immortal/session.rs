@@ -153,14 +153,12 @@ impl SessionManager {
     /// session.
     /// Returns false if the session id was not good or the store already contains the ID
     pub fn add_session(&mut self, session_id: &str) -> bool {
-        if session_id_is_good(session_id) {
-            if !self.store.contains_key(session_id) {
-                let session = Session::new(session_id);
-                self.store.insert(session_id.to_string(), session);
-                return true;
-            }
+        if session_id_is_good(session_id) && !self.store.contains_key(session_id) {
+            let session = Session::new(session_id);
+            self.store.insert(session_id.to_string(), session);
+            return true;
         }
-        return false;
+        false
     }
 
     /// tries to get an existing session 

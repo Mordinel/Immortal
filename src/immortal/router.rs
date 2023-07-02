@@ -57,7 +57,7 @@ impl Router {
     /// if it fails, the fallback is automatically called.
     /// if response is already a redirect, don't call.
     pub fn call(&self, method: &str, ctx: &mut ImmortalContext) {
-        if is_redirect(&ctx.response) {
+        if is_redirect(ctx.response) {
             return;
         }
         let by_method = match self.routes.get(method) {
