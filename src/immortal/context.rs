@@ -10,6 +10,7 @@ use super::{
 pub struct ImmortalContext<'a, 'b> {
     pub request: &'a Request,
     pub response: &'a mut Response<'b>,
+    pub session_id: String,
     session_manager: &'a SessionManagerMtx,
 }
 
@@ -17,10 +18,12 @@ pub struct ImmortalContext<'a, 'b> {
 impl<'a, 'b> ImmortalContext<'a, 'b> {
     pub fn new(request: &'a Request,
                response: &'a mut Response<'b>, 
+               session_id: String,
                session_manager: &'a SessionManagerMtx) -> Self {
         Self {
             request,
             response,
+            session_id,
             session_manager,
         }
     }
@@ -42,7 +45,7 @@ impl<'a, 'b> ImmortalContext<'a, 'b> {
     pub fn read_session(&self, session_id: &str, key: &str) -> Option<String> {
         match self.session_manager.lock() {
             Err(_) => None,
-            Ok(session_manager) => {
+            Ok(mut session_manager) => {
                 session_manager.read_session(session_id, key)
             },
         }
@@ -70,16 +73,22 @@ impl<'a, 'b> ImmortalContext<'a, 'b> {
         }
     }
 
+    // Creates a new session and returns the session id
+    pub fn new_session(&mut self) -> String {
+        self.session_manager.lock().unwrap().create_session()
+    }
+
     /// Returns true or false if the session associated with session_id exists
     pub fn session_exists(&self, session_id: &str) -> bool {
         match self.session_manager.lock() {
             Err(_) => false,
-            Ok(session_manager) => {
+            Ok(mut session_manager) => {
                 session_manager.session_exists(session_id)
             },
         }
     }
 
+    /// Sets the response code and location header
     pub fn redirect(&mut self, location: &str) {
         self.response.code = "302";
         self.response.headers.insert("Location", location.to_string());

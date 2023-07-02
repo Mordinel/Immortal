@@ -2,11 +2,35 @@
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 
+use crate::{SessionManager, ImmortalContext};
+use lazy_static::lazy_static;
+
 use super::{
     SessionManagerMtx,
     Request,
     cookie::Cookie,
 };
+
+lazy_static! {
+    static ref STATUSES: HashMap<String, String> = HashMap::from([
+            ( "200".to_string(), "OK".to_string() ),
+            ( "301".to_string(), "MOVED PERMANENTLY".to_string() ),
+            ( "302".to_string(), "FOUND".to_string() ),
+            ( "308".to_string(), "PERMANENT REDIRECT".to_string() ),
+            ( "400".to_string(), "BAD REQUEST".to_string() ),
+            ( "401".to_string(), "UNAUTHORIZED".to_string() ),
+            ( "403".to_string(), "FORBIDDEN".to_string() ),
+            ( "404".to_string(), "NOT FOUND".to_string() ),
+            ( "411".to_string(), "LENGTH REQUIRED".to_string() ),
+            ( "413".to_string(), "PAYLOAD TOO LARGE".to_string() ),
+            ( "414".to_string(), "URI TOO LONG".to_string() ),
+            ( "418".to_string(), "I AM A TEAPOT".to_string() ),
+            ( "426".to_string(), "UPGRADE REQUIRED".to_string() ),
+            ( "451".to_string(), "UNAVAILABLE FOR LEGAL REASONS".to_string() ),
+            ( "500".to_string(), "INTERNAL SERVER ERROR".to_string() ),
+            ( "501".to_string(), "NOT IMPLEMENTED".to_string() ),
+        ]);
+}
 
 #[derive(Debug)]
 pub struct Response<'a> {
@@ -21,7 +45,7 @@ pub struct Response<'a> {
 
 impl Response<'_> {
     /// Constructs a default response based on the passed request.
-    pub fn new(req: &mut Request, session_manager: &SessionManagerMtx) -> Self {
+    pub fn new(req: &mut Request, session_manager: &SessionManagerMtx, session_id: &mut String) -> Self {
         let mut headers: HashMap<&str, String> = HashMap::new();
         let now: DateTime<Utc> = Utc::now();
 
@@ -33,20 +57,28 @@ impl Response<'_> {
         });
         headers.insert("Content-Type", "text/html".to_string());
 
+        let mut session_manager = session_manager.lock().unwrap();
+
+        if let Some(cookie) = req.cookies.get("id") {
+            *session_id = cookie.value.clone();
+        }
+
+        let mut should_add_cookie = false;
+        if !session_manager.add_session(session_id) {
+            if !session_manager.session_exists(session_id) {
+                *session_id = SessionManager::generate_id();
+                should_add_cookie = true;
+            } 
+        } 
+
         let mut cookies: Vec<Cookie> = Vec::new();
-        match session_manager.lock() {
-            Err(_) => {},
-            Ok(mut session_manager) => {
-                let (session_id, is_new) = session_manager.get_or_create_session(&req.cookies).unwrap();
-                req.session_id = session_id;
-                if is_new {
-                    cookies.push(Cookie::builder()
-                                 .name("id")
-                                 .value(&req.session_id)
-                                 .http_only(true)
-                                 .build());
-                }
-            }
+        if should_add_cookie {
+            let cookie = Cookie::builder()
+                .name("id")
+                .value(session_id)
+                .http_only(true)
+                .build();
+            cookies.push(cookie);
         }
 
         Self {
@@ -84,33 +116,15 @@ impl Response<'_> {
     /// Generates the serial data for an HTTP response using the object internal state
     pub fn serialize(&mut self) -> Vec<u8> {
         let mut serialized = vec![];
-        let statuses: HashMap<String, String> = HashMap::from([ // TODO: Make this static
-            ( "200".to_string(), "OK".to_string() ),
-            ( "301".to_string(), "MOVED PERMANENTLY".to_string() ),
-            ( "302".to_string(), "FOUND".to_string() ),
-            ( "308".to_string(), "PERMANENT REDIRECT".to_string() ),
-            ( "400".to_string(), "BAD REQUEST".to_string() ),
-            ( "401".to_string(), "UNAUTHORIZED".to_string() ),
-            ( "403".to_string(), "FORBIDDEN".to_string() ),
-            ( "404".to_string(), "NOT FOUND".to_string() ),
-            ( "411".to_string(), "LENGTH REQUIRED".to_string() ),
-            ( "413".to_string(), "PAYLOAD TOO LARGE".to_string() ),
-            ( "414".to_string(), "URI TOO LONG".to_string() ),
-            ( "418".to_string(), "I AM A TEAPOT".to_string() ),
-            ( "426".to_string(), "UPGRADE REQUIRED".to_string() ),
-            ( "451".to_string(), "UNAVAILABLE FOR LEGAL REASONS".to_string() ),
-            ( "500".to_string(), "INTERNAL SERVER ERROR".to_string() ),
-            ( "501".to_string(), "NOT IMPLEMENTED".to_string() ),
-        ]);
 
-        let mut status = match statuses.get(self.code) {
+        let mut status = match STATUSES.get(self.code) {
             None => self.status,
             Some(thing) => thing,
         };
 
         if status.is_empty() {
             self.code = "500";
-            status = match statuses.get(self.code) {
+            status = match STATUSES.get(self.code) {
                 None => "INTERNAL SERVER ERROR",
                 Some(thing) => thing,
             };
@@ -134,7 +148,6 @@ impl Response<'_> {
                 serialized.append(&mut format!("{}: {}\r\n", &key, &value).into_bytes());
             }
         }
-
 
         // output content or not depending on the request method
         if self.method != "HEAD" {

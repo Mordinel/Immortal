@@ -1,7 +1,12 @@
-use immortal_http::*;
+use std::time::Duration;
+
+use immortal_http::{*, cookie::Cookie};
 
 fn main() {
     let mut immortal = Immortal::new();
+
+    immortal.set_expiry_duration(Duration::from_secs(600));
+    immortal.set_prune_duration(Duration::from_secs(60));
 
     immortal.fallback(|ctx| {
         ctx.response.code = "404";
@@ -16,7 +21,7 @@ fn main() {
 
     immortal.add_middleware(|ctx| {
         match ctx.request.document.as_str() {
-            "/" | "/login" | "/favicon.ico" => return,
+            "/" | "/login" | "/logout" | "/favicon.ico" => return,
             _ => {},
         }
 
@@ -108,23 +113,33 @@ fn main() {
 }
 
 fn get_username(ctx: &mut ImmortalContext) -> Option<String> {
-    ctx.read_session(&ctx.request.session_id, "username")
+    ctx.read_session(&ctx.session_id, "username")
 }
 
 fn log_out(ctx: &mut ImmortalContext) {
-    ctx.write_session(&ctx.request.session_id, "username", "");
+    let id = ctx.session_id.clone();
+    ctx.write_session(&id, "username", "");
 }
 
 fn log_in(ctx: &mut ImmortalContext, username: &str) {
-    ctx.write_session(&ctx.request.session_id, "username", username);
+    let id = ctx.session_id.clone();
+    ctx.delete_session(&id);
+
+    let session_id = ctx.new_session();
+    ctx.response.cookies.push(
+        Cookie::builder().name("id").value(&session_id).http_only(true).build()
+    );
+    ctx.write_session(&session_id, "username", username);
+    ctx.session_id = session_id;
 }
 
 fn get_message(ctx: &mut ImmortalContext) -> Option<String> {
-    ctx.read_session(&ctx.request.session_id, "message")
+    ctx.read_session(&ctx.session_id, "message")
 }
 
 fn set_message(ctx: &mut ImmortalContext, message: &str) {
-    ctx.write_session(&ctx.request.session_id, "message", message);
+    let id = ctx.session_id.clone();
+    ctx.write_session(&id, "message", message);
 }
 
 fn clear_message(ctx: &mut ImmortalContext) {

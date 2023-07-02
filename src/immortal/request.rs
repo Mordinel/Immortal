@@ -31,62 +31,10 @@ pub struct Request {
     
     pub host: String,
     pub user_agent: String,
-    pub session_id: String,
     pub connection: String,
     pub content_type: String,
     pub content_length: usize,
     pub keep_alive: bool,
-}
-
-impl PartialEq for Request {
-    fn eq(&self, other: &Self) -> bool {
-        if self.body != other.body { return false }
-        if self.method != other.method { return false }
-        if self.document != other.document { return false }
-        if self.query != other.query { return false }
-        if self.protocol != other.protocol { return false }
-        if self.version != other.version { return false }
-
-        if self.host != other.host { return false }
-        if self.user_agent != other.user_agent { return false }
-        if self.connection != other.connection { return false }
-        if self.content_type != other.content_type { return false }
-        if self.content_length != other.content_length { return false }
-        if self.keep_alive != other.keep_alive { return false }
-
-        if self.get.len() != other.get.len() { return false }
-        if self.post.len() != other.post.len() { return false }
-        if self.headers.len() != other.headers.len() { return false }
-
-        for (key, value) in &self.get {
-            match other.get.get(key) {
-                None => return false,
-                Some(thing) => {
-                    if value != thing { return false }
-                },
-            }
-        }
-
-        for (key, value) in &self.post {
-            match other.post.get(key) {
-                None => return false,
-                Some(thing) => {
-                    if value != thing { return false }
-                },
-            }
-        }
-
-        for (key, value) in &self.headers {
-            match other.headers.get(key) {
-                None => return false,
-                Some(thing) => {
-                    if value != thing { return false }
-                },
-            }
-        }
-
-        true
-    }
 }
 
 #[allow(dead_code)]
@@ -183,7 +131,6 @@ impl Request {
         };
 
         let cookies = get_cookies(&cookies_raw);
-        let session_id = String::new();
 
         // emit a complete Request object
         Ok(Self {
@@ -199,7 +146,6 @@ impl Request {
             cookies,
             host,
             user_agent,
-            session_id,
             connection,
             content_type,
             content_length,

@@ -2,7 +2,7 @@ use std::{
     net::{TcpListener, TcpStream},
     io::{Read, Write, ErrorKind},
     sync::{Arc, Mutex},
-    thread,
+    thread, time::Duration,
 };
 
 use anyhow::{anyhow, Result};
@@ -99,8 +99,9 @@ fn handle_connection(
                     Ok(req) => req,
                 };
 
-                let mut response = Response::new(&mut request, session_manager);
-                let mut ctx = ImmortalContext::new(&request, &mut response, session_manager);
+                let mut session_id = String::new();
+                let mut response = Response::new(&mut request, session_manager, &mut session_id);
+                let mut ctx = ImmortalContext::new(&request, &mut response, session_id, session_manager);
 
                 middleware.run(&mut ctx);
                 router.call(&request.method, &mut ctx);
@@ -137,7 +138,7 @@ impl Immortal {
         Self {
             middleware: Middleware::new(),
             router: Router::new(),
-            session_manager: Arc::new(Mutex::new(SessionManager::new())),
+            session_manager: Arc::new(Mutex::new(SessionManager::default())),
         }
     }
 
@@ -173,8 +174,9 @@ impl Immortal {
             Ok(req) => req,
         };
 
-        let mut response = Response::new(&mut request, &self.session_manager);
-        let mut ctx = ImmortalContext::new(&request, &mut response, &self.session_manager);
+        let mut session_id = String::new();
+        let mut response = Response::new(&mut request, &self.session_manager, &mut session_id);
+        let mut ctx = ImmortalContext::new(&request, &mut response, session_id, &self.session_manager);
 
         self.middleware.run(&mut ctx);
         self.router.call(&request.method, &mut ctx);
@@ -207,6 +209,16 @@ impl Immortal {
     /// implementation handles this.
     pub fn fallback(&mut self, func: Handler) {
         self.router.fallback = func;
+    }
+
+    /// Sets the server-side session expiry duration
+    pub fn set_expiry_duration(&mut self, duration: Duration) {
+        self.session_manager.lock().unwrap().set_expiry_duration(duration);
+    }
+
+    /// Sets the server-side session prune duration
+    pub fn set_prune_duration(&mut self, duration: Duration) {
+        self.session_manager.lock().unwrap().set_prune_duration(duration);
     }
 }
 
