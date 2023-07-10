@@ -143,8 +143,14 @@ impl Immortal {
         }
     }
 
-    /// Listens for incoming connections and sends them to handle_connection
+    /// Listens for incoming connections, with as many threads as the system has available for
+    /// parallelism
     pub fn listen(&self, socket_str: &str) -> Result<()> {
+        self.listen_with(socket_str, thread::available_parallelism()?.get())
+    }
+
+    /// Listens for incoming connections using a specific amount of threads
+    pub fn listen_with(&self, socket_str: &str, thread_count: usize) -> Result<()> {
         let listener = TcpListener::bind(socket_str)?;
 
         match listener.local_addr() {
@@ -152,7 +158,7 @@ impl Immortal {
             Ok(socket) => println!("Server starting at: http://{}", socket),
         };
 
-        let thread_pool = Pool::new(thread::available_parallelism()?.get());
+        let thread_pool = Pool::new(thread_count);
 
         thread_pool.scoped(|scope| {
             for stream in listener.incoming() {
