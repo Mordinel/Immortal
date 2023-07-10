@@ -33,7 +33,7 @@ pub struct Request {
     pub user_agent: String,
     pub connection: String,
     pub content_type: String,
-    pub content_length: usize,
+    pub content_length: Option<usize>,
     pub keep_alive: bool,
 }
 
@@ -49,60 +49,65 @@ impl Request {
             Some(thing) => thing.to_vec(),
         };
 
-        // split request line and header chunk
         let (request_line, request_headers) = request_line_header_split(request_head);
 
-        // split to each major component of a request line
         let request_line_items: [&[u8]; 3] = match request_line
             .split(|c| *c == b' ')
             .collect::<Vec<&[u8]>>()
             .try_into() {
-                Err(_) => return Err(anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid request line"))),
+                Err(_) => return Err(
+                    anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid request line"))
+                ),
                 Ok(items) => items,
         };
 
-        // parse method
         let method = str::from_utf8(&request_line_items[0].to_ascii_uppercase())?.to_string();
 
-        // parse document and query
         let (document, query) = split_once(request_line_items[1], b'?');
 
         let document = str::from_utf8(document)?.to_string();
+
+        if !document.starts_with('/') {
+            return Err(
+                anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid document parameter"))
+            );
+        }
 
         let query = match query {
             None => "".to_string(),
             Some(thing) => str::from_utf8(thing)?.to_string(),
         };
         
-        // parse protocol/version components
         let proto_version_items: [&[u8]; 2] = match request_line_items[2]
             .split(|c| *c == b'/')
             .collect::<Vec<&[u8]>>()
             .try_into() {
-                Err(_) => return Err(anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid proto string"))),
+                Err(_) => return Err(
+                    anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid proto string"))
+                ),
                 Ok(items) => items,
         };
 
-        // parse protocol string
         let protocol = str::from_utf8(proto_version_items[0])?.to_string();
 
         if protocol != "HTTP" {
-            return Err(anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid protocol in proto string")));
+            return Err(
+                anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid protocol in proto string"))
+            );
         }
 
-        // parse protocol version string
         let version = str::from_utf8(proto_version_items[1])?
             .trim_end_matches(|c| c == '\r' || c == '\n' || c == '\0')
             .to_string();
 
         if version != "1.1" {
-            return Err(anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid version in proto string")));
+            return Err(
+                anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid version in proto string"))
+            );
         }
 
-        // parse headers
         let headers = parse_headers(request_headers.unwrap_or_default())?;
 
-        // collect common headers from the `headers` HashMap
         let host = collect_header(&headers, "Host");
         let user_agent = collect_header(&headers, "User-Agent");
         let connection = collect_header(&headers, "Connection");
@@ -110,16 +115,11 @@ impl Request {
         let content_length = collect_header(&headers, "Content-Length");
         let cookies_raw = collect_header(&headers, "Cookie");
 
-        // parse keep-alive status as bool
         let keep_alive = connection == "keep-alive";
 
-        // parse `content_length` else return the index of the first null char in the body
         let content_length = match content_length.parse::<usize>() {
-            Err(_) => body
-                .iter()
-                .take_while(|c| **c != b'\0')
-                .count(),
-            Ok(l) => l,
+            Err(_) => None,
+            Ok(l) => Some(l),
         };
 
         let get = parse_parameters(&query);

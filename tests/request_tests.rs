@@ -67,7 +67,7 @@ mod tests {
         assert_eq!(request.connection, "keep-alive");
         assert!(request.keep_alive);
         assert_eq!(request.content_type, "some_content_type");
-        assert_eq!(request.content_length, 13);
+        assert_eq!(request.content_length, Some(13));
         assert_eq!(request.body, b"Hello, World!");
         assert_eq!(request.header(""), None);
         assert_eq!(request.header("8&&&x"), None);
