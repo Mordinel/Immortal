@@ -3,6 +3,7 @@ use std::{
     str, io,
     io::ErrorKind,
     collections::HashMap,
+    net::SocketAddr,
 };
 
 use anyhow::{anyhow, Result};
@@ -34,12 +35,18 @@ pub struct Request {
     pub user_agent: String,
     pub content_type: String,
     pub content_length: Option<usize>,
+    pub peer_addr: Option<SocketAddr>,
 }
 
 #[allow(dead_code)]
 impl Request {
+    // Construct a new request object using only a slice of u8
+    pub fn from_slice(buf: &[u8]) -> Result<Self> {
+        Self::new(buf, None)
+    }
+
     /// Construct a new request object, parsing the request buffer
-    pub fn new(buf: &[u8]) -> Result<Self> {
+    pub fn new(buf: &[u8], peer_addr: Option<&SocketAddr>) -> Result<Self> {
         // parse body
         let (request_head, request_body) = request_head_body_split(buf);
 
@@ -194,6 +201,7 @@ impl Request {
             user_agent,
             content_type,
             content_length,
+            peer_addr: peer_addr.copied(),
         })
     }
     

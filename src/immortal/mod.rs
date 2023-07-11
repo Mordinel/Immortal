@@ -70,7 +70,10 @@ fn handle_connection(
     session_manager: &SessionManagerMtx,
     middleware: &Middleware,
     router: &Router) {
-
+    let peer_addr = match stream.peer_addr() {
+        Ok(addr) => Some(addr),
+        Err(_) => None,
+    };
     let mut buf: [u8; 4096] = [0; 4096];
     loop {
         buf.fill(0u8);
@@ -90,7 +93,7 @@ fn handle_connection(
         match read_sz {
             0 => break,
             _ => {
-                let mut request = match Request::new(&buf) {
+                let mut request = match Request::new(&buf, peer_addr.as_ref()) {
                     Err(_) => {
                         let mut response = Response::bad();
                         if let Err(e) = stream.write(response.serialize().as_slice()) { match e.kind() {
@@ -173,7 +176,7 @@ impl Immortal {
     }
 
     pub fn process_buffer(&mut self, request_buffer: &[u8]) -> Vec<u8> {
-        let mut request = match Request::new(request_buffer) {
+        let mut request = match Request::from_slice(request_buffer) {
             Err(_) => return Response::bad().serialize(),
             Ok(req) => req,
         };

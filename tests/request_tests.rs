@@ -26,7 +26,7 @@ mod tests {
     #[test]
     fn test_request() {
         let mut buffer = b"GET / HTTP/1.1".to_vec();
-        let request = Request::new(buffer.as_mut_slice()).unwrap();
+        let request = Request::from_slice(buffer.as_mut_slice()).unwrap();
 
         assert_eq!(request.method, "GET");
         assert_eq!(request.document , "/");
@@ -40,7 +40,7 @@ mod tests {
         buffer.append(&mut b"GET ".to_vec());
         buffer.append(&mut b"/?param_one=val_one&param_two=val=two&param_three=val%20three ".to_vec());
         buffer.append(&mut b"HTTP/1.1".to_vec());
-        let request = Request::new(buffer.as_mut_slice()).unwrap();
+        let request = Request::from_slice(buffer.as_mut_slice()).unwrap();
 
         assert_eq!(request.get("param_one").unwrap(), "val_one");
         assert_eq!(request.get("param_two").unwrap(), "val=two");
@@ -60,7 +60,7 @@ mod tests {
         buffer.append(&mut b"Content-Length: 13\r\n".to_vec());
         buffer.append(&mut b"\r\n".to_vec());
         buffer.append(&mut b"Hello, World!".to_vec());
-        let request = Request::new(buffer.as_mut_slice()).unwrap();
+        let request = Request::from_slice(buffer.as_mut_slice()).unwrap();
 
         assert_eq!(request.method, "POST");
         assert_eq!(request.host, "127.0.0.1");
@@ -83,7 +83,7 @@ mod tests {
         buffer.append(&mut format!("Content-length: {}\r\n", query.len()).as_bytes().to_vec());
         buffer.append(&mut b"\r\n".to_vec());
         buffer.append(&mut query.to_vec());
-        let request = Request::new(buffer.as_mut_slice()).unwrap();
+        let request = Request::from_slice(buffer.as_mut_slice()).unwrap();
 
         assert_eq!(request.post("param_one").unwrap(), "val_one");
         assert_eq!(request.post("param_two").unwrap(), "val=two");
@@ -98,7 +98,7 @@ mod tests {
         buffer.append(&mut b"Cookie: id=9001; other_cookie=cookie_value; last-cookie=short-lived; \r\n".to_vec());
         buffer.append(&mut b"Connection: close\r\n".to_vec());
         buffer.append(&mut b"\r\n".to_vec());
-        let request = Request::new(buffer.as_mut_slice()).unwrap();
+        let request = Request::from_slice(buffer.as_mut_slice()).unwrap();
 
         let cookie_a = request.cookie("id").unwrap();
         let cookie_b = request.cookie("other_cookie").unwrap();
@@ -118,7 +118,7 @@ mod tests {
         buffer.append(&mut b"Content-Type: wrong content type\r\n".to_vec());
         buffer.append(&mut b"\r\n".to_vec());
         buffer.append(&mut b"param_one=val_one&param_two=val=two&param_three=val%20three".to_vec());
-        let request = Request::new(buffer.as_mut_slice()).unwrap();
+        let request = Request::from_slice(buffer.as_mut_slice()).unwrap();
 
         assert_eq!(request.post("param_one"), None);
         assert_eq!(request.post("param_two"), None);
@@ -137,7 +137,7 @@ mod tests {
         cases.push(buffer);
 
         for mut buf in cases {
-            let _request = Request::new(buf.as_mut_slice());
+            let _request = Request::from_slice(buf.as_mut_slice());
         }
     }
 
@@ -161,7 +161,7 @@ mod tests {
         cases.push(buffer);
 
         for mut buf in cases {
-            let request = Request::new(buf.as_mut_slice());
+            let request = Request::from_slice(buf.as_mut_slice());
             let error = request.unwrap_err();
             match error.downcast_ref::<io::Error>() {
                 Some(err) => {
@@ -197,7 +197,7 @@ mod tests {
         cases.push(buffer);
 
         for mut buf in cases {
-            let request = Request::new(buf.as_mut_slice());
+            let request = Request::from_slice(buf.as_mut_slice());
             let error = request.unwrap_err();
             assert!(match error.downcast_ref::<Utf8Error>() {
                 Some(_) => true,
