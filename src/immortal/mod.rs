@@ -43,6 +43,16 @@ fn log(stream: &TcpStream, req: &Request, resp: &Response) {
                                 now.timestamp_subsec_micros())
                             .bright_blue());
 
+    let method = match req.method.as_str() {
+        "" => "<no method>".red().bold(),
+        _ => strip_for_terminal(&req.method).normal(),
+    };
+
+    let document = match req.document.as_str() {
+        "" => "<no document>".red().bold(),
+        _ => strip_for_terminal(&req.document).normal(),
+    };
+
     let user_agent = match req.header("User-Agent") {
         None => "<no user-agent>".red().bold(),
         Some(thing) => strip_for_terminal(thing).normal(),
@@ -52,14 +62,13 @@ fn log(stream: &TcpStream, req: &Request, resp: &Response) {
              date_time,
              time_stamp,
              remote_socket,
-             strip_for_terminal(&req.method).bold(),
+             method,
              util::code_color(resp.code),
              resp.body.len(),
-             match &req.query.is_empty() {
-                 true => strip_for_terminal(&req.document),
-                 false => {
-                     strip_for_terminal(&req.document) + "?" + &strip_for_terminal(&req.query)
-                 }
+             if req.query.is_empty() {
+                document
+             } else {
+                format!("{}?{}", document, &strip_for_terminal(&req.query)).normal()
              },
              user_agent);
 }
@@ -95,7 +104,9 @@ fn handle_connection(
             _ => {
                 let mut request = match Request::new(&buf, peer_addr.as_ref()) {
                     Err(_) => {
+                        let request = Request::bad();
                         let mut response = Response::bad();
+                        log(&stream, &request, &response);
                         if let Err(e) = stream.write(response.serialize().as_slice()) { match e.kind() {
                                 ErrorKind::Interrupted => continue,
                                 _ => eprintln!("{}", e),

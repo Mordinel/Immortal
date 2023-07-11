@@ -18,7 +18,7 @@ pub type Cookies = HashMap<String, Cookie>;
 
 /// Request contains the request representation that is serialised from the main HTTP request from
 /// the socket.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Request {
     pub body: Vec<u8>,
     pub method: String,
@@ -40,9 +40,14 @@ pub struct Request {
 
 #[allow(dead_code)]
 impl Request {
-    // Construct a new request object using only a slice of u8
+    /// Construct a new request object using only a slice of u8
     pub fn from_slice(buf: &[u8]) -> Result<Self> {
         Self::new(buf, None)
+    }
+
+    /// Create a default request object for a fail state
+    pub fn bad() -> Self {
+        Self::default()
     }
 
     /// Construct a new request object, parsing the request buffer
