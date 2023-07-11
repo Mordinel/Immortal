@@ -3,7 +3,26 @@ use std::str;
 use std::str::Utf8Error;
 use std::collections::HashMap;
 
+use colored::{Colorize, ColoredString};
+
 use super::Response;
+
+/// colours an HTTP code appropriately
+pub fn code_color(code: &str) -> ColoredString {
+    match code.bytes().nth(0) {
+        Some(n) => match n {
+            b'1' => code.white().bold(),
+            b'2' => code.green(),
+            b'3' => code.cyan().bold(),
+            b'4' => code.yellow(),
+            b'5' => code.red().bold(),
+            _ => code.normal(),
+        },
+        None => {
+            "<no response code>".red().bold()
+        },
+    }
+}
 
 /// accepts a response and returns true if it is a redirect response
 pub fn is_redirect(response: &Response) -> bool {

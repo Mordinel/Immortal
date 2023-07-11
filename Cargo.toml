@@ -13,6 +13,7 @@ license = "GPL-3.0"
 [dependencies]
 anyhow = "1.0.65"
 chrono = "0.4"
+colored = "2.0.4"
 debug_print = "1.0.0"
 lazy_static = "1.4.0"
 openssl = "0.10.55"

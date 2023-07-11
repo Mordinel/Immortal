@@ -48,10 +48,8 @@ impl Response<'_> {
     /// Constructs a default response based on the passed request.
     pub fn new(req: &mut Request, session_manager: &SessionManagerMtx, session_id: &mut String) -> Self {
         let mut headers: HashMap<&str, String> = HashMap::new();
-        let now: DateTime<Utc> = Utc::now();
 
         // default headers
-        headers.insert("Date", now.format("%a, %d %b %Y %H:%M:%S").to_string());
         headers.insert("Connection", "close".to_string());
         headers.insert("Content-Type", "text/html".to_string());
 
@@ -97,10 +95,8 @@ impl Response<'_> {
     /// Constructs a default error response
     pub fn bad() -> Self {
         let mut headers: HashMap<&str, String> = HashMap::new();
-        let now: DateTime<Utc> = Utc::now();
 
         // default headers
-        headers.insert("Date", now.format("%a, %d %b %Y %H:%M:%S").to_string());
         headers.insert("Connection",  "close".to_string());
         headers.insert("Content-Type", "text/html".to_string());
 
@@ -144,6 +140,9 @@ impl Response<'_> {
 
         // emit the status line
         serialized.append(&mut format!("{} {} {}\r\n", &self.protocol, &self.code, &status).into_bytes());
+
+        let now: DateTime<Utc> = Utc::now();
+        self.headers.insert("Date", now.format("%a, %d %b %Y %H:%M:%S").to_string());
 
         // emit headers
         for (key, value) in self.headers.iter() {

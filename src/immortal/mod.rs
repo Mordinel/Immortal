@@ -6,7 +6,9 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
+use chrono::Utc;
 use scoped_thread_pool::Pool;
+use colored::*;
 
 pub mod response;
 pub mod request;
@@ -27,25 +29,31 @@ pub use crate::immortal::{
     util::strip_for_terminal,
 };
 
-/// Prints access logs in the same format as Nginx access logs
 fn log(stream: &TcpStream, req: &Request, resp: &Response) {
     let remote_socket = match stream.peer_addr() {
-        Err(_) => "<no socket>".to_string(),
-        Ok(s) => s.ip().to_string(),
+        Err(_) => "<no socket>".red().bold(),
+        Ok(s) => s.ip().to_string().normal(),
     };
-    let date = match resp.header("Date") {
-        None => "<no date>",
-        Some(thing) => thing,
-    };
+
+    let now = Utc::now();
+    let date_time = now.format("%a, %d %b %Y %H:%M:%S").to_string();
+    let time_stamp = format!("[{:<17}]",
+                             format!("{}.{}",
+                                now.timestamp(),
+                                now.timestamp_subsec_micros())
+                            .bright_blue());
+
     let user_agent = match req.header("User-Agent") {
-        None => "<no user-agent>",
-        Some(thing) => thing,
+        None => "<no user-agent>".red().bold(),
+        Some(thing) => strip_for_terminal(thing).normal(),
     };
-    println!("{}\t{}\t{}\t{}\t{}\t{}\t{}",
+
+    println!("{}  {}  {}  {}\t{}  {}\t{}\t{}",
+             date_time,
+             time_stamp,
              remote_socket,
-             date,
-             strip_for_terminal(&req.method),
-             resp.code,
+             strip_for_terminal(&req.method).bold(),
+             util::code_color(resp.code),
              resp.body.len(),
              match &req.query.is_empty() {
                  true => strip_for_terminal(&req.document),
@@ -53,7 +61,7 @@ fn log(stream: &TcpStream, req: &Request, resp: &Response) {
                      strip_for_terminal(&req.document) + "?" + &strip_for_terminal(&req.query)
                  }
              },
-             strip_for_terminal(user_agent));
+             user_agent);
 }
 
 /// Reads the TcpStream and handles errors while reading
