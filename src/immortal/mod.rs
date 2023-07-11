@@ -186,6 +186,8 @@ impl Immortal {
         Ok(())
     }
 
+    /// Pass a buffer through the HTTP implementation without listening on a port or dispatching
+    /// tasks to threads.
     pub fn process_buffer(&mut self, request_buffer: &[u8]) -> Vec<u8> {
         let mut request = match Request::from_slice(request_buffer) {
             Err(_) => return Response::bad().serialize(),
@@ -245,7 +247,7 @@ impl Immortal {
     }
 
     /// configures sessions to be enabled
-    pub fn disabled_session(&mut self) {
+    pub fn enable_sessions(&mut self) {
         self.session_manager.lock().unwrap().enable();
     }
 }
