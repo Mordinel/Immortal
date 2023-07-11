@@ -37,7 +37,7 @@ mod tests {
     #[test]
     fn test_parse_parameters() {
         let param_string = String::from("param_one=val_one&param_two=val=two&param_three=val%20three");
-        let params = parse_parameters(&param_string);
+        let params = parse_parameters(&param_string).unwrap();
         assert_eq!(params.get("param_one").unwrap(), "val_one");
         assert_eq!(params.get("param_two").unwrap(), "val=two");
         assert_eq!(params.get("param_three").unwrap(), "val three");
@@ -46,7 +46,7 @@ mod tests {
     #[test]
     fn test_parse_parameters_empty() {
         let param_string = String::from("");
-        let params = parse_parameters(&param_string);
+        let params = parse_parameters(&param_string).unwrap();
         assert_eq!(params.len(), 0);
         assert_eq!(params.get("param_three"), None);
     }

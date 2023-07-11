@@ -6,6 +6,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
+use debug_print::debug_println;
 
 use super::{
     cookie::{Cookie, parse_cookies},
@@ -31,10 +32,8 @@ pub struct Request {
     
     pub host: String,
     pub user_agent: String,
-    pub connection: String,
     pub content_type: String,
     pub content_length: Option<usize>,
-    pub keep_alive: bool,
 }
 
 #[allow(dead_code)]
@@ -44,7 +43,7 @@ impl Request {
         // parse body
         let (request_head, request_body) = request_head_body_split(buf);
 
-        let body = match request_body {
+        let mut body = match request_body {
             None => vec![],
             Some(thing) => thing.to_vec(),
         };
@@ -55,9 +54,14 @@ impl Request {
             .split(|c| *c == b' ')
             .collect::<Vec<&[u8]>>()
             .try_into() {
-                Err(_) => return Err(
-                    anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid request line"))
-                ),
+                Err(_) => {
+                    debug_println!("ERROR: Invalid request line: {}", 
+                        str::from_utf8(request_line)
+                            .unwrap_or(&format!("{:?}", request_line)));
+                    return Err(
+                        anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid request line"))
+                    );
+                },
                 Ok(items) => items,
         };
 
@@ -68,6 +72,7 @@ impl Request {
         let document = str::from_utf8(document)?.to_string();
 
         if !document.starts_with('/') {
+            debug_println!("ERROR: {document} does not start with /");
             return Err(
                 anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid document parameter"))
             );
@@ -82,15 +87,21 @@ impl Request {
             .split(|c| *c == b'/')
             .collect::<Vec<&[u8]>>()
             .try_into() {
-                Err(_) => return Err(
-                    anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid proto string"))
-                ),
+                Err(_) => {
+                    debug_println!("ERROR: Invalid protocol string: {}", 
+                        str::from_utf8(request_line_items[2])
+                            .unwrap_or(&format!("{:?}", request_line_items[2])));
+                    return Err(
+                        anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid proto string"))
+                    );
+                },
                 Ok(items) => items,
         };
 
         let protocol = str::from_utf8(proto_version_items[0])?.to_string();
 
         if protocol != "HTTP" {
+            debug_println!("ERROR: Invalid protocol {protocol}");
             return Err(
                 anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid protocol in proto string"))
             );
@@ -101,6 +112,7 @@ impl Request {
             .to_string();
 
         if version != "1.1" {
+            debug_println!("ERROR: Invalid version {version}");
             return Err(
                 anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid version in proto string"))
             );
@@ -110,22 +122,56 @@ impl Request {
 
         let host = collect_header(&headers, "Host");
         let user_agent = collect_header(&headers, "User-Agent");
-        let connection = collect_header(&headers, "Connection");
         let content_type = collect_header(&headers, "Content-Type");
         let content_length = collect_header(&headers, "Content-Length");
         let cookies_raw = collect_header(&headers, "Cookie");
 
-        let keep_alive = connection == "keep-alive";
-
         let content_length = match content_length.parse::<usize>() {
             Err(_) => None,
-            Ok(l) => Some(l),
+            Ok(len) => {
+                body = match body.get(..len) {
+                    Some(slice) => slice.to_vec(),
+                    None => {
+                        debug_println!("ERROR: Content-Length discrepancy {} != {}",
+                                       len, body.len());
+                        return Err(
+                            anyhow!(io::Error::new(ErrorKind::InvalidInput, "Content-Length discrepancy"))
+                        );
+                    },
+                };
+                if len != body.len() {
+                    debug_println!("ERROR: Content-Length discrepancy {} != {}", len, body.len());
+                    return Err(
+                        anyhow!(io::Error::new(ErrorKind::InvalidInput, "Content-Length discrepancy"))
+                    );
+
+                }
+                Some(len)
+            },
         };
 
-        let get = parse_parameters(&query);
+        let get = match parse_parameters(&query) {
+            Ok(g) => g,
+            Err(_) => {
+                debug_println!("ERROR: Invalid get parameters: {}", 
+                    str::from_utf8(&body).unwrap_or(&format!("{:?}", query)));
+                HashMap::new()
+            }
+        };
 
-        let post = if method == "POST" && content_type == "application/x-www-form-urlencoded" {
-            parse_parameters(str::from_utf8(&body).unwrap_or_default())
+        let post = if method == "POST"
+                && content_type == "application/x-www-form-urlencoded"
+                && content_length.is_some() {
+            match parse_parameters(str::from_utf8(&body).unwrap_or_default()) {
+                Ok(p) => p,
+                Err(_) => {
+                    debug_println!("ERROR: Invalid post parameters: {}", 
+                        str::from_utf8(&body).unwrap_or(&format!("{:?}", body)));
+                    return Err(
+                        anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid POST parameters"))
+                    );
+                }
+            }
         } else {
             HashMap::new()
         };
@@ -146,10 +192,8 @@ impl Request {
             cookies,
             host,
             user_agent,
-            connection,
             content_type,
             content_length,
-            keep_alive,
         })
     }
     

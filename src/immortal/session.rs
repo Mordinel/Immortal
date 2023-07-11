@@ -1,4 +1,5 @@
 use std::{collections::HashMap, time::{Instant, Duration}};
+use debug_print::debug_println;
 use openssl::rand::rand_bytes;
 
 use super::request::Cookies;
@@ -199,7 +200,7 @@ impl SessionManager {
             }
         }
 
-        println!("Pruning {} of {} sessions", to_remove.len(), self.store.len());
+        debug_println!("Pruning {} of {} sessions", to_remove.len(), self.store.len());
         for id in to_remove {
             self.store.remove(id.as_str());
         }

@@ -64,8 +64,6 @@ mod tests {
 
         assert_eq!(request.method, "POST");
         assert_eq!(request.host, "127.0.0.1");
-        assert_eq!(request.connection, "keep-alive");
-        assert!(request.keep_alive);
         assert_eq!(request.content_type, "some_content_type");
         assert_eq!(request.content_length, Some(13));
         assert_eq!(request.body, b"Hello, World!");
@@ -76,13 +74,15 @@ mod tests {
 
     #[test]
     fn test_request_post() {
+        let query = b"param_one=val_one&param_two=val=two&param_three=val%20three";
         let mut buffer = b"".to_vec();
         buffer.append(&mut b"POST / HTTP/1.1\r\n".to_vec());
         buffer.append(&mut b"Host: 127.0.0.1\r\n".to_vec());
         buffer.append(&mut b"Connection: close\r\n".to_vec());
         buffer.append(&mut b"Content-Type: application/x-www-form-urlencoded\r\n".to_vec());
+        buffer.append(&mut format!("Content-length: {}\r\n", query.len()).as_bytes().to_vec());
         buffer.append(&mut b"\r\n".to_vec());
-        buffer.append(&mut b"param_one=val_one&param_two=val=two&param_three=val%20three".to_vec());
+        buffer.append(&mut query.to_vec());
         let request = Request::new(buffer.as_mut_slice()).unwrap();
 
         assert_eq!(request.post("param_one").unwrap(), "val_one");

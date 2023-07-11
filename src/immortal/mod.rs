@@ -89,12 +89,12 @@ fn handle_connection(
                             Err(e) => match e.kind() {
                                 ErrorKind::Interrupted => continue,
                                 _ => {
-                                    println!("{}", e);
-                                    break;
+                                    eprintln!("{}", e);
                                 },
                             },
-                            Ok(_) => break,
+                            Ok(_) => (),
                         }
+                        return;
                     },
                     Ok(req) => req,
                 };
@@ -111,12 +111,6 @@ fn handle_connection(
                 if let Err(e) = stream.write(response.serialize().as_slice()) {
                     if e.kind() == ErrorKind::Interrupted { continue }
                 };
-
-                if request.keep_alive {
-                    continue;
-                } else {
-                    break;
-                }
             },
         };
     };

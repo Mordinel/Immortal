@@ -1,6 +1,7 @@
 
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
+use debug_print::debug_println;
 
 use super::SessionManager;
 use lazy_static::lazy_static;
@@ -51,10 +52,7 @@ impl Response<'_> {
 
         // default headers
         headers.insert("Date", now.format("%a, %d %b %Y %H:%M:%S").to_string());
-        headers.insert("Connection", match req.keep_alive {
-            true => "keep-alive".to_string(),
-            false => "close".to_string(),
-        });
+        headers.insert("Connection", "close".to_string());
         headers.insert("Content-Type", "text/html".to_string());
 
         let mut session_manager = session_manager.lock().unwrap();
@@ -121,6 +119,7 @@ impl Response<'_> {
         };
 
         if status.is_empty() {
+            debug_println!("ERROR: No default status string for HTTP {}, sending 500", self.code);
             self.code = "500";
             status = match STATUSES.get(self.code) {
                 None => "INTERNAL SERVER ERROR",

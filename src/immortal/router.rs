@@ -1,5 +1,7 @@
 
 use std::collections::HashMap;
+use debug_print::debug_println;
+
 use super::{ImmortalContext, util::is_redirect};
 
 pub type Handler = fn(&mut ImmortalContext);
@@ -11,6 +13,7 @@ pub struct Router {
 }
 
 fn not_implemented(ctx: &mut ImmortalContext) {
+    debug_println!("ERROR: default fallback handler fired, you probably mean to replace this.");
     ctx.response.code = "501";
     ctx.response.body = b"<h1>501: Not Implemented</h1>".to_vec();
 }

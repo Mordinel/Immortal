@@ -96,9 +96,9 @@ pub fn url_decode(to_decode: &str) -> Result<String, Utf8Error> {
 }
 
 /// Parses an HTTP query string into a key-value hashmap
-pub fn parse_parameters(to_parse: &str) -> HashMap<String, String> {
+pub fn parse_parameters(to_parse: &str) -> Result<HashMap<String, String>, ()> {
     if to_parse.is_empty() {
-        return HashMap::new();
+        return Ok(HashMap::new());
     }
 
     #[derive(Debug, PartialEq, Eq)]
@@ -144,6 +144,8 @@ pub fn parse_parameters(to_parse: &str) -> HashMap<String, String> {
                                 Ok(v) => v,
                             };
                             params.insert(name.clone(), value.clone());
+                        } else {
+                            return Err(());
                         }
                         state = ParseState::Name;
                     }
@@ -159,14 +161,14 @@ pub fn parse_parameters(to_parse: &str) -> HashMap<String, String> {
         value = builder;
         if !value.is_empty() && is_param_name_valid(&name) {
             value = match url_decode(&value) {
-                Err(_) => return params,
+                Err(_) => return Ok(params),
                 Ok(v) => v,
             };
             params.insert(name, value);
         }
     }
 
-    params
+    Ok(params)
 }
 
 /// Accepts a slice containing unparsed headers straight from the request recieve buffer, split and
