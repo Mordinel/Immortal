@@ -221,5 +221,15 @@ impl Immortal {
     pub fn set_prune_duration(&mut self, duration: Duration) {
         self.session_manager.lock().unwrap().set_prune_duration(duration);
     }
+
+    /// configures sessions to be disabled, clears existing server-side sessions
+    pub fn disable_sessions(&mut self) {
+        self.session_manager.lock().unwrap().disable();
+    }
+
+    /// configures sessions to be enabled
+    pub fn disabled_session(&mut self) {
+        self.session_manager.lock().unwrap().enable();
+    }
 }
 

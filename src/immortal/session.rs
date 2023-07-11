@@ -25,6 +25,7 @@ pub type SessionStore = HashMap<String, Session>;
 
 /// provides APIs to interact with user session stores.
 pub struct SessionManager {
+    is_enabled: bool,
     store: SessionStore,
     expiry_duration: Duration,
     prune_duration: Duration,
@@ -61,11 +62,29 @@ impl Default for SessionManager {
 impl SessionManager {
     pub fn new(expiry_duration: Duration, prune_duration: Duration) -> SessionManager {
         SessionManager {
+            is_enabled: true,
             store: HashMap::new(),
             expiry_duration,
             prune_duration,
             last_prune: Instant::now(),
         }
+    }
+
+
+    /// returns true if sessions are enabled
+    pub fn is_enabled(&self) -> bool {
+        self.is_enabled
+    }
+
+    /// enables sessions
+    pub fn enable(&mut self) {
+        self.is_enabled = true;
+    }
+
+    /// disables sessions and clears all existing sessions
+    pub fn disable(&mut self) {
+        self.is_enabled = false;
+        self.store.clear();
     }
 
     /// sets the expiry duration for sessions

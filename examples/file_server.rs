@@ -8,7 +8,7 @@ use immortal_http::*;
 
 fn main() {
     let mut immortal = Immortal::new();
-
+    immortal.disable_sessions();
     immortal.fallback(web_server);
 
     if let Err(e) = immortal.listen_with("127.0.0.1:7777", 4) {
