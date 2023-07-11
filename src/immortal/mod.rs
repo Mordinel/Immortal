@@ -93,15 +93,10 @@ fn handle_connection(
                 let mut request = match Request::new(&buf) {
                     Err(_) => {
                         let mut response = Response::bad();
-                        match stream.write(response.serialize().as_slice()) {
-                            Err(e) => match e.kind() {
+                        if let Err(e) = stream.write(response.serialize().as_slice()) { match e.kind() {
                                 ErrorKind::Interrupted => continue,
-                                _ => {
-                                    eprintln!("{}", e);
-                                },
-                            },
-                            Ok(_) => (),
-                        }
+                                _ => eprintln!("{}", e),
+                        }   }
                         return;
                     },
                     Ok(req) => req,

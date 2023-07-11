@@ -9,7 +9,7 @@ use super::Response;
 
 /// colours an HTTP code appropriately
 pub fn code_color(code: &str) -> ColoredString {
-    match code.bytes().nth(0) {
+    match code.as_bytes().first() {
         Some(n) => match n {
             b'1' => code.white().bold(),
             b'2' => code.green(),
@@ -115,6 +115,7 @@ pub fn url_decode(to_decode: &str) -> Result<String, Utf8Error> {
 }
 
 /// Parses an HTTP query string into a key-value hashmap
+#[allow(clippy::result_unit_err)]
 pub fn parse_parameters(to_parse: &str) -> Result<HashMap<String, String>, ()> {
     if to_parse.is_empty() {
         return Ok(HashMap::new());

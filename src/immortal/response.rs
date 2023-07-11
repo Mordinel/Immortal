@@ -62,23 +62,19 @@ impl Response<'_> {
         }
 
         let mut should_add_cookie = false;
-        if session_manager.is_enabled() {
-            if !session_manager.add_session(session_id) && !session_manager.session_exists(session_id) {
-                *session_id = SessionManager::generate_id();
-                should_add_cookie = true;
-            } 
+        if session_manager.is_enabled() && !session_manager.add_session(session_id) && !session_manager.session_exists(session_id) {
+            *session_id = SessionManager::generate_id();
+            should_add_cookie = true;
         }
 
         let mut cookies: Vec<Cookie> = Vec::new();
-        if session_manager.is_enabled() {
-            if should_add_cookie {
-                let cookie = Cookie::builder()
-                    .name("id")
-                    .value(session_id)
-                    .http_only(true)
-                    .build();
-                cookies.push(cookie);
-            }
+        if session_manager.is_enabled() && should_add_cookie {
+            let cookie = Cookie::builder()
+                .name("id")
+                .value(session_id)
+                .http_only(true)
+                .build();
+            cookies.push(cookie);
         }
 
         Self {
