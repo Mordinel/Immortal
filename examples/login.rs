@@ -1,6 +1,11 @@
 use std::time::Duration;
 
-use immortal_http::{*, cookie::Cookie};
+use immortal_http::{
+    Immortal,
+    context::Context,
+    cookie::Cookie,
+    util::escape_html,
+};
 
 fn main() {
     let mut immortal = Immortal::new();
@@ -37,7 +42,7 @@ fn main() {
                 ctx.response.body.append(&mut b"<p>Click <a href=\"/login\">HERE</a> to go to the login page</p>".to_vec());
             },
             Some(username) => {
-                let username = util::escape_html(&username);
+                let username = escape_html(&username);
                 ctx.response.body.append(&mut format!("<h1>Welcome to the website, {username}!</h1>").as_bytes().to_vec());
                 ctx.response.body.append(&mut b"<p>Click <a href=\"/logout\">HERE</a> to log out</p>".to_vec());
                 ctx.response.body.append(&mut b"<p>Click <a href=\"/secret\">HERE</a> to see the secret</p>".to_vec());
@@ -65,7 +70,7 @@ fn main() {
             None => {},
             Some(message) => {
                 ctx.response.body.append(
-                    &mut format!("<br><p>{}</p>", util::escape_html(&message)).as_bytes().to_vec()
+                    &mut format!("<br><p>{}</p>", escape_html(&message)).as_bytes().to_vec()
                 );
                 clear_message(ctx);
             },
@@ -111,16 +116,16 @@ fn main() {
     }
 }
 
-fn get_username(ctx: &mut ImmortalContext) -> Option<String> {
+fn get_username(ctx: &mut Context) -> Option<String> {
     ctx.read_session(&ctx.session_id, "username")
 }
 
-fn log_out(ctx: &mut ImmortalContext) {
+fn log_out(ctx: &mut Context) {
     let id = ctx.session_id.clone();
     ctx.write_session(&id, "username", "");
 }
 
-fn log_in(ctx: &mut ImmortalContext, username: &str) {
+fn log_in(ctx: &mut Context, username: &str) {
     let id = ctx.session_id.clone();
     ctx.delete_session(&id);
 
@@ -132,20 +137,20 @@ fn log_in(ctx: &mut ImmortalContext, username: &str) {
     ctx.session_id = session_id;
 }
 
-fn get_message(ctx: &mut ImmortalContext) -> Option<String> {
+fn get_message(ctx: &mut Context) -> Option<String> {
     ctx.read_session(&ctx.session_id, "message")
 }
 
-fn set_message(ctx: &mut ImmortalContext, message: &str) {
+fn set_message(ctx: &mut Context, message: &str) {
     let id = ctx.session_id.clone();
     ctx.write_session(&id, "message", message);
 }
 
-fn clear_message(ctx: &mut ImmortalContext) {
+fn clear_message(ctx: &mut Context) {
     set_message(ctx, "");
 }
 
-fn is_logged_in(ctx: &mut ImmortalContext) -> bool {
+fn is_logged_in(ctx: &mut Context) -> bool {
     get_username(ctx).is_some()
 }
 

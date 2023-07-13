@@ -4,7 +4,10 @@ use std::{
     os::unix::prelude::OsStrExt
 };
 
-use immortal_http::*;
+use immortal_http::{
+    Immortal,
+    context::Context,
+};
 
 fn main() {
     let mut immortal = Immortal::new();
@@ -16,7 +19,7 @@ fn main() {
     }
 }
 
-fn web_server(ctx: &mut ImmortalContext) {
+fn web_server(ctx: &mut Context) {
     let mut document = ctx.request.document.clone();
     document = collapse_chr(&document, '/');
     document = collapse_chr(&document, '.');
@@ -86,7 +89,7 @@ fn web_server(ctx: &mut ImmortalContext) {
     }
 }
 
-fn four_oh_four(ctx: &mut ImmortalContext) {
+fn four_oh_four(ctx: &mut Context) {
     ctx.response.code = "404";
     ctx.response.body.extend(b"<h1>404: File Not Found!</h1>".iter());
 }

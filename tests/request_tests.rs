@@ -1,10 +1,14 @@
 #[cfg(test)]
 mod tests {
 
+    use immortal_http::{
+        Immortal,
+        request::Request,
+    };
+
     use std::io;
     use std::io::ErrorKind;
     use std::str::Utf8Error;
-    use immortal_http::*;
 
     #[test]
     fn test_middleware_redirects() {
