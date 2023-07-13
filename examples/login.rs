@@ -15,7 +15,6 @@ fn main() {
     immortal.add_middleware(|ctx| {
         ctx.response.headers.insert("X-Frame-Options", "deny".to_string());
         ctx.response.headers.insert("X-Content-Type-Options", "nosniff".to_string());
-        ctx.response.headers.insert("Content-Security-Policy", "default-src 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'; upgrade-insecure-requests; block-all-mixed-content".to_string());
         ctx.response.headers.insert("Referrer-Policy", "no-referrer".to_string());
     });
 
