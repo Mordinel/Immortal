@@ -5,9 +5,9 @@ use super::{
     session::SessionManagerMtx,
 };
 
-/// ImmortalContext is a structure that is exposed to the programmer when registering closures as
+/// Context is a structure that is exposed to the programmer when registering closures as
 /// request handlers.
-pub struct ImmortalContext<'a, 'b> {
+pub struct Context<'a, 'b> {
     pub request: &'a Request,
     pub response: &'a mut Response<'b>,
     pub session_id: String,
@@ -15,7 +15,7 @@ pub struct ImmortalContext<'a, 'b> {
 }
 
 #[allow(dead_code)]
-impl<'a, 'b> ImmortalContext<'a, 'b> {
+impl<'a, 'b> Context<'a, 'b> {
     pub fn new(request: &'a Request,
                response: &'a mut Response<'b>, 
                session_id: String,

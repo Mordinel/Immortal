@@ -2,13 +2,13 @@
 use std::collections::HashMap;
 
 use super::{
-    context::ImmortalContext, 
+    context::Context, 
     util::is_redirect,
 };
 
 use debug_print::debug_println;
 
-pub type Handler = fn(&mut ImmortalContext);
+pub type Handler = fn(&mut Context);
 
 /// provides an API to register and lookup HTTP routes
 pub struct Router {
@@ -16,7 +16,7 @@ pub struct Router {
     routes: HashMap<String, HashMap<String, Handler>>,
 }
 
-fn not_implemented(ctx: &mut ImmortalContext) {
+fn not_implemented(ctx: &mut Context) {
     debug_println!("ERROR: default fallback handler fired, you probably mean to replace this.");
     ctx.response.code = "501";
     ctx.response.body = b"<h1>501: Not Implemented</h1>".to_vec();
@@ -63,7 +63,7 @@ impl Router {
     /// tries to call a registered path
     /// if it fails, the fallback is automatically called.
     /// if response is already a redirect, don't call.
-    pub fn call(&self, method: &str, ctx: &mut ImmortalContext) {
+    pub fn call(&self, method: &str, ctx: &mut Context) {
         if is_redirect(ctx.response) {
             return;
         }

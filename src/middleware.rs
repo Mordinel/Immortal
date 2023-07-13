@@ -1,7 +1,7 @@
 
 use super::{
     router::Handler,
-    context::ImmortalContext,
+    context::Context,
     util::is_redirect,
 };
 
@@ -27,7 +27,7 @@ impl Middleware {
     }
 
     /// Runs all the middleware on the `ctx`
-    pub fn run(&self, ctx: &mut ImmortalContext) {
+    pub fn run(&self, ctx: &mut Context) {
         for func in &self.middleware {
             if is_redirect(ctx.response) {
                 return;

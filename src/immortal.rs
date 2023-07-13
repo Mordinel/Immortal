@@ -16,7 +16,7 @@ pub use super::{
     middleware::Middleware,
     router::{Router, Handler},
     session::{SessionManager, SessionManagerMtx},
-    context::ImmortalContext,
+    context::Context,
     util::{strip_for_terminal, code_color},
 };
 
@@ -109,7 +109,7 @@ fn handle_connection(
 
                 let mut session_id = String::new();
                 let mut response = Response::new(&mut request, session_manager, &mut session_id);
-                let mut ctx = ImmortalContext::new(&request, &mut response, session_id, session_manager);
+                let mut ctx = Context::new(&request, &mut response, session_id, session_manager);
 
                 middleware.run(&mut ctx);
                 router.call(&request.method, &mut ctx);
@@ -185,7 +185,7 @@ impl Immortal {
 
         let mut session_id = String::new();
         let mut response = Response::new(&mut request, &self.session_manager, &mut session_id);
-        let mut ctx = ImmortalContext::new(&request, &mut response, session_id, &self.session_manager);
+        let mut ctx = Context::new(&request, &mut response, session_id, &self.session_manager);
 
         self.middleware.run(&mut ctx);
         self.router.call(&request.method, &mut ctx);
