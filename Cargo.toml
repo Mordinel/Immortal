@@ -1,6 +1,6 @@
 [package]
 name = "immortal-http"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 authors = ["Mason Soroka-Gill <mordinel@pm.me>"]
 repository = "https://github.com/Mordinel/Immortal"
