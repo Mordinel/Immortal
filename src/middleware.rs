@@ -1,5 +1,9 @@
 
-use super::{Handler, ImmortalContext, util::is_redirect};
+use super::{
+    router::Handler,
+    context::ImmortalContext,
+    util::is_redirect,
+};
 
 /// Provides middleware functionality
 pub struct Middleware {

@@ -1,5 +1,5 @@
 
-use crate::immortal::util::is_param_name_valid;
+use super::util::is_param_name_valid;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]

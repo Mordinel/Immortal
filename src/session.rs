@@ -1,8 +1,15 @@
-use std::{collections::HashMap, time::{Instant, Duration}};
+use std::{
+    collections::HashMap,
+    time::{Instant, Duration},
+    sync::{Arc, Mutex},
+};
+
+use super::request::Cookies;
+
 use debug_print::debug_println;
 use openssl::rand::rand_bytes;
 
-use super::request::Cookies;
+pub type SessionManagerMtx = Arc<Mutex<SessionManager>>;
 
 #[allow(dead_code)]
 pub struct Session {

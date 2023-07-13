@@ -2,7 +2,7 @@
 use super::{
     request::Request,
     response::Response,
-    SessionManagerMtx,
+    session::SessionManagerMtx,
 };
 
 /// ImmortalContext is a structure that is exposed to the programmer when registering closures as

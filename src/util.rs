@@ -1,11 +1,13 @@
 
-use std::str;
-use std::str::Utf8Error;
-use std::collections::HashMap;
+use std::{
+    str,
+    str::Utf8Error,
+    collections::HashMap,
+};
+
+use super::response::Response;
 
 use colored::{Colorize, ColoredString};
-
-use super::Response;
 
 /// colours an HTTP code appropriately
 pub fn code_color(code: &str) -> ColoredString {

@@ -6,13 +6,13 @@ use std::{
     net::SocketAddr,
 };
 
-use anyhow::{anyhow, Result};
-use debug_print::debug_println;
-
 use super::{
     cookie::{Cookie, parse_cookies},
     util::*,
 };
+
+use anyhow::{anyhow, Result};
+use debug_print::debug_println;
 
 pub type Cookies = HashMap<String, Cookie>;
 

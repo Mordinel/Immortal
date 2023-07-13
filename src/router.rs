@@ -1,8 +1,12 @@
 
 use std::collections::HashMap;
-use debug_print::debug_println;
 
-use super::{ImmortalContext, util::is_redirect};
+use super::{
+    context::ImmortalContext, 
+    util::is_redirect,
+};
+
+use debug_print::debug_println;
 
 pub type Handler = fn(&mut ImmortalContext);
 

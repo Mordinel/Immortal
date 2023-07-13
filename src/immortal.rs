@@ -10,23 +10,14 @@ use chrono::Utc;
 use scoped_thread_pool::Pool;
 use colored::*;
 
-pub mod response;
-pub mod request;
-pub mod middleware;
-pub mod router;
-pub mod util;
-pub mod cookie;
-pub mod session;
-pub mod context;
-
-pub use crate::immortal::{
+pub use super::{
     request::Request,
     response::Response,
     middleware::Middleware,
     router::{Router, Handler},
-    session::SessionManager,
+    session::{SessionManager, SessionManagerMtx},
     context::ImmortalContext,
-    util::strip_for_terminal,
+    util::{strip_for_terminal, code_color},
 };
 
 fn log(stream: &TcpStream, req: &Request, resp: &Response) {
@@ -63,7 +54,7 @@ fn log(stream: &TcpStream, req: &Request, resp: &Response) {
              time_stamp,
              remote_socket,
              method,
-             util::code_color(resp.code),
+             code_color(resp.code),
              resp.body.len(),
              if req.query.is_empty() {
                 document
@@ -132,8 +123,6 @@ fn handle_connection(
         };
     };
 }
-
-pub type SessionManagerMtx = Arc<Mutex<SessionManager>>;
 
 /// Immortal middleware and routing configuration, as well as the session manager.
 #[derive(Default)]
