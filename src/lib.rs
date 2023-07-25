@@ -27,6 +27,7 @@ use anyhow::{anyhow, Result};
 use scoped_thread_pool::Pool;
 use chrono::Utc;
 use colored::*;
+use debug_print::debug_println;
 
 fn log(stream: &TcpStream, req: &Request, resp: &Response) {
     let remote_socket = match stream.peer_addr() {
@@ -91,7 +92,7 @@ fn handle_connection(
                     continue;
                 },
                 _ => { // other errors
-                    println!("{}", e);
+                    debug_println!("{}", e);
                     break;
                 },
             },
@@ -108,7 +109,7 @@ fn handle_connection(
                         log(&stream, &request, &response);
                         if let Err(e) = stream.write(response.serialize().as_slice()) { match e.kind() {
                                 ErrorKind::Interrupted => continue,
-                                _ => eprintln!("{}", e),
+                                _ => debug_println!("{}", e),
                         }   }
                         return;
                     },
