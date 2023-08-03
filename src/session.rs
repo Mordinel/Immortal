@@ -7,7 +7,7 @@ use std::{
 use super::request::Cookies;
 
 use debug_print::debug_println;
-use openssl::rand::rand_bytes;
+use super::util::rand_bytes;
 
 pub type SessionManagerMtx = Arc<Mutex<SessionManager>>;
 
@@ -107,7 +107,7 @@ impl SessionManager {
     /// generates a new session id without storing a session
     pub fn generate_id() -> String {
         let mut buf = [0u8;28];
-        rand_bytes(&mut buf).unwrap();
+        rand_bytes(&mut buf);
         to_hex_string(buf)
     }
 

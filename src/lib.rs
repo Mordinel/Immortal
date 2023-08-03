@@ -109,7 +109,7 @@ fn handle_connection(
                         log(&stream, &request, &response);
                         if let Err(e) = stream.write(response.serialize().as_slice()) { match e.kind() {
                                 ErrorKind::Interrupted => continue,
-                                _ => debug_println!("{}", e),
+                                _ => { debug_println!("{}", e) },
                         }   }
                         return;
                     },

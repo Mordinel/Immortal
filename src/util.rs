@@ -9,6 +9,12 @@ use super::response::Response;
 
 use colored::{Colorize, ColoredString};
 
+pub fn rand_bytes(buf: &mut [u8]) {
+    for item in buf.iter_mut() {
+        *item = rand::random();
+    }
+}
+
 /// colours an HTTP code appropriately
 pub fn code_color(code: &str) -> ColoredString {
     match code.as_bytes().first() {
