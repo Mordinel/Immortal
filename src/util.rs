@@ -9,6 +9,7 @@ use super::response::Response;
 
 use colored::{Colorize, ColoredString};
 
+/// fills the provided slice of u8 with random bytes
 pub fn rand_bytes(buf: &mut [u8]) {
     for item in buf.iter_mut() {
         *item = rand::random();
