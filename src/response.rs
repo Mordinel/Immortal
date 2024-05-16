@@ -52,7 +52,7 @@ impl Response<'_> {
         headers.insert("Connection", "close".to_string());
         headers.insert("Content-Type", "text/html".to_string());
 
-        let mut session_manager = session_manager.lock().unwrap();
+        let mut session_manager = session_manager.write().unwrap();
 
         if session_manager.is_enabled() {
             if let Some(cookie) = req.cookies.get("id") {

@@ -17,19 +17,19 @@ use context::Context;
 use util::{strip_for_terminal, code_color};
 
 use std::{
+    io::{Read, Write},
     net::{TcpListener, TcpStream},
-    io::{Read, Write, ErrorKind},
-    sync::{Arc, Mutex},
-    thread, time::Duration,
+    sync::{Arc, RwLock},
+    time::Duration,
+    thread,
 };
 
 use anyhow::{anyhow, Result};
-use scoped_thread_pool::Pool;
 use chrono::Utc;
 use colored::*;
 use debug_print::debug_println;
 
-fn log(stream: &TcpStream, req: &Request, resp: &Response) {
+fn log(stream: &TcpStream, req: &Request, resp: &Response, sent: usize) {
     let remote_socket = match stream.peer_addr() {
         Err(_) => "<no socket>".red().bold(),
         Ok(s) => s.ip().to_string().normal(),
@@ -64,7 +64,7 @@ fn log(stream: &TcpStream, req: &Request, resp: &Response) {
              remote_socket,
              method,
              code_color(resp.code),
-             resp.body.len(),
+             sent,
              if req.query.is_empty() {
                 document
              } else {
@@ -78,59 +78,70 @@ fn handle_connection(
     mut stream: TcpStream,
     session_manager: &SessionManagerMtx,
     middleware: &Middleware,
-    router: &Router) {
+    router: &Router
+) {
     let peer_addr = match stream.peer_addr() {
         Ok(addr) => Some(addr),
         Err(_) => None,
     };
     let mut buf: [u8; 4096] = [0; 4096];
-    loop {
-        buf.fill(0u8);
-        let read_sz = match stream.read(&mut buf) {
-            Err(e) => match e.kind() {
-                ErrorKind::Interrupted => {
-                    continue;
-                },
-                _ => { // other errors
-                    debug_println!("{}", e);
-                    break;
-                },
-            },
-            Ok(sz) => sz,
-        };
-
-        match read_sz {
-            0 => break,
-            _ => {
-                let mut request = match Request::new(&buf, peer_addr.as_ref()) {
-                    Err(_) => {
-                        let request = Request::bad();
-                        let mut response = Response::bad();
-                        log(&stream, &request, &response);
-                        if let Err(e) = stream.write(response.serialize().as_slice()) { match e.kind() {
-                                ErrorKind::Interrupted => continue,
-                                _ => { debug_println!("{}", e) },
-                        }   }
-                        return;
-                    },
-                    Ok(req) => req,
-                };
-
-                let mut session_id = String::new();
-                let mut response = Response::new(&mut request, session_manager, &mut session_id);
-                let mut ctx = Context::new(&request, &mut response, session_id, session_manager);
-
-                middleware.run(&mut ctx);
-                router.call(&request.method, &mut ctx);
-
-                log(&stream, &request, &response);
-
-                if let Err(e) = stream.write(response.serialize().as_slice()) {
-                    if e.kind() == ErrorKind::Interrupted { continue }
-                };
-            },
-        };
+    let read_sz = match stream.read(&mut buf) {
+        Err(e) => match e.kind() { _ => {
+            debug_println!("{}", e);
+            let _ = stream.shutdown(std::net::Shutdown::Both);
+            return;
+        }, },
+        Ok(sz) => sz,
     };
+    debug_println!("SERVER <<< {read_sz} <<< {}", peer_addr.unwrap());
+
+    match read_sz {
+        //0 => break,
+        0 => {
+            let _ = stream.shutdown(std::net::Shutdown::Both);
+            return
+        },
+        _ => {
+            let mut request = match Request::new(&buf, peer_addr.as_ref()) {
+                Err(_) => {
+                    let request = Request::bad();
+                    let mut response = Response::bad();
+                    match stream.write(response.serialize().as_slice()) {
+                        Ok(sent) => {
+                            log(&stream, &request, &response, sent);
+                            debug_println!("SERVER >>> {sent} >>> {}", peer_addr.unwrap());
+                        },
+                        Err(_) => {
+                            log(&stream, &request, &response, 0);
+                            debug_println!("SERVER >>> SEND ERROR >>> !");
+                        },
+                    }
+                    let _ = stream.shutdown(std::net::Shutdown::Both);
+                    return;
+                },
+                Ok(req) => req,
+            };
+
+            let mut session_id = String::new();
+            let mut response = Response::new(&mut request, session_manager, &mut session_id);
+            let mut ctx = Context::new(&request, &mut response, session_id, session_manager);
+
+            middleware.run(&mut ctx);
+            router.call(&request.method, &mut ctx);
+
+            match stream.write(response.serialize().as_slice()) {
+                Ok(sent) => {
+                    log(&stream, &request, &response, sent);
+                    debug_println!("SERVER >>> {sent} >>> {}", peer_addr.unwrap());
+                },
+                Err(_) => {
+                    log(&stream, &request, &response, 0);
+                    println!("SERVER >>> SEND ERROR >>> !");
+                },
+            };
+        },
+    };
+    let _ = stream.shutdown(std::net::Shutdown::Both);
 }
 
 /// Immortal middleware and routing configuration, as well as the session manager.
@@ -148,7 +159,7 @@ impl Immortal {
         Self {
             middleware: Middleware::new(),
             router: Router::new(),
-            session_manager: Arc::new(Mutex::new(SessionManager::default())),
+            session_manager: Arc::new(RwLock::new(SessionManager::default())),
         }
     }
 
@@ -167,20 +178,21 @@ impl Immortal {
             Ok(socket) => println!("Server starting at: http://{}", socket),
         };
 
-        let thread_pool = Pool::new(thread_count);
+        let thread_pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(thread_count)
+            .build()?;
 
-        thread_pool.scoped(|scope| {
+        let _ = thread_pool.scope(|scope| {
             for stream in listener.incoming() {
                 match stream {
                     Err(e) => return Err(anyhow!(e)),
-                    Ok(stream) => scope.execute(|| {
-                        handle_connection(stream, &self.session_manager, &self.middleware, &self.router)
+                    Ok(stream) => scope.spawn(|_s| {
+                        handle_connection(stream, &self.session_manager, &self.middleware, &self.router);
                     }),
                 };
-            }
+            };
             Ok(())
-        })?;
-
+        });
         Ok(())
     }
 
@@ -231,22 +243,22 @@ impl Immortal {
 
     /// Sets the server-side session expiry duration
     pub fn set_expiry_duration(&mut self, duration: Duration) {
-        self.session_manager.lock().unwrap().set_expiry_duration(duration);
+        self.session_manager.write().unwrap().set_expiry_duration(duration);
     }
 
     /// Sets the server-side session prune duration
     pub fn set_prune_duration(&mut self, duration: Duration) {
-        self.session_manager.lock().unwrap().set_prune_duration(duration);
+        self.session_manager.write().unwrap().set_prune_duration(duration);
     }
 
     /// configures sessions to be disabled, clears existing server-side sessions
     pub fn disable_sessions(&mut self) {
-        self.session_manager.lock().unwrap().disable();
+        self.session_manager.write().unwrap().disable();
     }
 
     /// configures sessions to be enabled
     pub fn enable_sessions(&mut self) {
-        self.session_manager.lock().unwrap().enable();
+        self.session_manager.write().unwrap().enable();
     }
 }
 

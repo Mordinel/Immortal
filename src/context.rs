@@ -32,7 +32,7 @@ impl<'a, 'b> Context<'a, 'b> {
     /// Returns true if a write happened to a session, false if no session id exists
     /// Writing an empty string to this will remove the item from the session storage
     pub fn write_session(&mut self, session_id: &str, key: &str, value: &str) -> bool {
-        match self.session_manager.lock() {
+        match self.session_manager.write() {
             Err(_) => false,
             Ok(mut session_manager) => {
                 session_manager.write_session(session_id, key, value)
@@ -43,9 +43,9 @@ impl<'a, 'b> Context<'a, 'b> {
     /// Reads from a session store, the value associated with the key
     /// Returns None if the session or the key is nonexistent
     pub fn read_session(&self, session_id: &str, key: &str) -> Option<String> {
-        match self.session_manager.lock() {
+        match self.session_manager.read() {
             Err(_) => None,
-            Ok(mut session_manager) => {
+            Ok(session_manager) => {
                 session_manager.read_session(session_id, key)
             },
         }
@@ -54,7 +54,7 @@ impl<'a, 'b> Context<'a, 'b> {
     /// Clears the session data of any session ID passed in Shrinks the session data hashmap 
     /// accordingly
     pub fn clear_session(&mut self, session_id: &str) {
-        match self.session_manager.lock() {
+        match self.session_manager.write() {
             Err(_) => (),
             Ok(mut session_manager) => {
                 session_manager.clear_session(session_id)
@@ -65,7 +65,7 @@ impl<'a, 'b> Context<'a, 'b> {
     /// Completely deletes the session storage related to the passed-in session_id value
     /// Shrinks the session storage hashmap accordingly
     pub fn delete_session(&mut self, session_id: &str) {
-        match self.session_manager.lock() {
+        match self.session_manager.write() {
             Err(_) => (),
             Ok(mut session_manager) => {
                 session_manager.delete_session(session_id)
@@ -75,14 +75,14 @@ impl<'a, 'b> Context<'a, 'b> {
 
     // Creates a new session and returns the session id
     pub fn new_session(&mut self) -> String {
-        self.session_manager.lock().unwrap().create_session()
+        self.session_manager.write().unwrap().create_session()
     }
 
     /// Returns true or false if the session associated with session_id exists
     pub fn session_exists(&self, session_id: &str) -> bool {
-        match self.session_manager.lock() {
+        match self.session_manager.read() {
             Err(_) => false,
-            Ok(mut session_manager) => {
+            Ok(session_manager) => {
                 session_manager.session_exists(session_id)
             },
         }
