@@ -12,7 +12,7 @@ use request::Request;
 use response::Response;
 use middleware::Middleware;
 use router::{Router, Handler};
-use session::{SessionManager, SessionManagerMtx};
+use session::{InternalSessionManager, SessionManager};
 use context::Context;
 use util::{strip_for_terminal, code_color};
 
@@ -76,7 +76,7 @@ fn log(stream: &TcpStream, req: &Request, resp: &Response, sent: usize) {
 /// Reads the TcpStream and handles errors while reading
 fn handle_connection(
     mut stream: TcpStream,
-    session_manager: &SessionManagerMtx,
+    session_manager: &SessionManager,
     middleware: &Middleware,
     router: &Router
 ) {
@@ -122,7 +122,7 @@ fn handle_connection(
                 Ok(req) => req,
             };
 
-            let mut session_id = String::new();
+            let mut session_id = None;
             let mut response = Response::new(&mut request, session_manager, &mut session_id);
             let mut ctx = Context::new(&request, &mut response, session_id, session_manager);
 
@@ -149,7 +149,7 @@ fn handle_connection(
 pub struct Immortal {
     middleware: Middleware,
     router: Router,
-    session_manager: SessionManagerMtx,
+    session_manager: SessionManager,
 }
 
 #[allow(dead_code)]
@@ -159,7 +159,7 @@ impl Immortal {
         Self {
             middleware: Middleware::new(),
             router: Router::new(),
-            session_manager: Arc::new(RwLock::new(SessionManager::default())),
+            session_manager: Arc::new(RwLock::new(InternalSessionManager::default())),
         }
     }
 
@@ -204,7 +204,7 @@ impl Immortal {
             Ok(req) => req,
         };
 
-        let mut session_id = String::new();
+        let mut session_id = None;
         let mut response = Response::new(&mut request, &self.session_manager, &mut session_id);
         let mut ctx = Context::new(&request, &mut response, session_id, &self.session_manager);
 

@@ -130,11 +130,13 @@ fn log_in(ctx: &mut Context, username: &str) {
     ctx.delete_session(&id);
 
     let session_id = ctx.new_session();
-    ctx.response.cookies.push(
-        Cookie::builder().name("id").value(&session_id).http_only(true).build()
-    );
-    ctx.write_session(&session_id, "username", username);
-    ctx.session_id = session_id;
+    if let Some(id) = session_id {
+        ctx.response.cookies.push(
+            Cookie::builder().name("id").value(&id.to_string()).http_only(true).build()
+            );
+        ctx.write_session(&session_id, "username", username);
+        ctx.session_id = session_id;
+    }
 }
 
 fn get_message(ctx: &mut Context) -> Option<String> {

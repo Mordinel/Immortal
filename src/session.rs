@@ -4,34 +4,35 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use uuid::Uuid;
+
 use super::request::Cookies;
 
 use debug_print::debug_println;
-use super::util::rand_bytes;
 
-pub type SessionManagerMtx = Arc<RwLock<SessionManager>>;
+pub type SessionManager = Arc<RwLock<InternalSessionManager>>;
 
 #[allow(dead_code)]
 pub struct Session {
-    id: String,
+    id: Uuid,
     data: HashMap<String, String>,
     last_mutated: Instant,
 }
 
 impl Session {
-    fn new(id: &str) -> Session {
+    fn new(id: Uuid) -> Session {
         Session {
-            id: id.to_owned(),
+            id,
             data: HashMap::new(),
             last_mutated: Instant::now(),
         }
     }
 }
 
-pub type SessionStore = HashMap<String, Session>;
+pub type SessionStore = HashMap<Uuid, Session>;
 
 /// provides APIs to interact with user session stores.
-pub struct SessionManager {
+pub struct InternalSessionManager {
     is_enabled: bool,
     store: SessionStore,
     expiry_duration: Duration,
@@ -39,36 +40,15 @@ pub struct SessionManager {
     last_prune: Instant,
 }
 
-fn to_hex_string(buf: [u8;28]) -> String {
-    let mut out = String::new();
-    for b in buf {
-        out.push_str(format!("{b:02x}").as_str());
-    }
-    out
-}
-
-fn session_id_is_good(session_id: &str) -> bool {
-    if session_id.len() != 56 {
-        return false;
-    }
-    for chr in session_id.chars() {
-        match chr {
-            '0'..='9' | 'a'..='f' => {},
-            _ => return false,
-        }
-    }
-    true
-}
-
-impl Default for SessionManager {
+impl Default for InternalSessionManager {
     fn default() -> Self {
-        SessionManager::new(Duration::from_secs(60*60), Duration::from_secs(60*10))
+        InternalSessionManager::new(Duration::from_secs(60*60), Duration::from_secs(60*10))
     }
 }
 
-impl SessionManager {
-    pub fn new(expiry_duration: Duration, prune_duration: Duration) -> SessionManager {
-        SessionManager {
+impl InternalSessionManager {
+    pub fn new(expiry_duration: Duration, prune_duration: Duration) -> InternalSessionManager {
+        InternalSessionManager {
             is_enabled: true,
             store: HashMap::new(),
             expiry_duration,
@@ -105,16 +85,14 @@ impl SessionManager {
     }
 
     /// generates a new session id without storing a session
-    pub fn generate_id() -> String {
-        let mut buf = [0u8;28];
-        rand_bytes(&mut buf);
-        to_hex_string(buf)
+    pub fn generate_id() -> Uuid {
+        uuid::Uuid::new_v4()
     }
 
     /// generates a new session and returns the ID
-    pub fn create_session(&mut self) -> String {
+    pub fn create_session(&mut self) -> Option<Uuid> {
         if !self.is_enabled() {
-            return String::new();
+            return None;
         }
         let mut out;
         loop {
@@ -123,17 +101,20 @@ impl SessionManager {
                 break;
             }
         }
-        self.store.insert(out.to_owned(), Session::new(&out));
+        self.store.insert(out, Session::new(out));
         self.try_prune();
-        out
+        Some(out)
     }
 
     /// writes `value` to the key-value session store as `key` for the `session_id` session store.
-    pub fn write_session(&mut self, session_id: &str, key: &str, value: &str) -> bool {
+    pub fn write_session(&mut self, session_id: &Option<Uuid>, key: &str, value: &str) -> bool {
         if !self.is_enabled() {
             return false;
         }
-        if let Some(session) = self.store.get_mut(session_id) {
+        if session_id.is_none() {
+            return false;
+        }
+        if let Some(session) = self.store.get_mut(&session_id.unwrap()) {
             session.last_mutated = Instant::now();
             if value.is_empty() {
                 session.data.remove(key);
@@ -148,11 +129,14 @@ impl SessionManager {
     }
 
     /// reads the value associated with `key` for the `session_id` session store.
-    pub fn read_session(&self, session_id: &str, key: &str) -> Option<String> {
+    pub fn read_session(&self, session_id: &Option<Uuid>, key: &str) -> Option<String> {
         if !self.is_enabled() {
             return None;
         }
-        if let Some(session) = self.store.get(session_id) {
+        if session_id.is_none() {
+            return None;
+        }
+        if let Some(session) = self.store.get(&session_id.unwrap()) {
             if let Some(value) = session.data.get(key) {
                 return Some(value.to_owned());
             }
@@ -161,11 +145,14 @@ impl SessionManager {
     }
 
     /// empties the session store for `session_id`
-    pub fn clear_session(&mut self, session_id: &str) {
+    pub fn clear_session(&mut self, session_id: &Option<Uuid>) {
         if !self.is_enabled() {
             return;
         }
-        if let Some(session) = self.store.get_mut(session_id) {
+        if session_id.is_none() {
+            return;
+        }
+        if let Some(session) = self.store.get_mut(&session_id.unwrap()) {
             session.last_mutated = Instant::now();
             session.data.clear();
             session.data.shrink_to_fit();
@@ -174,34 +161,44 @@ impl SessionManager {
     }
 
     /// removes the session store for `session_id`
-    pub fn delete_session(&mut self, session_id: &str) {
+    pub fn delete_session(&mut self, session_id: &Option<Uuid>) {
         if !self.is_enabled() {
             return;
         }
-        self.store.remove(session_id);
+        if session_id.is_none() {
+            return;
+        }
+        self.store.remove(&session_id.unwrap());
         self.try_prune();
     }
 
     /// checks if a session store for `session_id` exists
-    pub fn session_exists(&self, session_id: &str) -> bool {
+    pub fn session_exists(&self, session_id: &Option<Uuid>) -> bool {
         if !self.is_enabled() {
             return false;
         }
-        self.store.contains_key(session_id)
+        if session_id.is_none() {
+            return false;
+        }
+        self.store.contains_key(&session_id.unwrap())
     }
-
 
     /// Accepts a session id, creates a session with it if the ID is not already for an existing
     /// session.
     /// Returns false if the session id was not good or the store already contains the ID
-    pub fn add_session(&mut self, session_id: &str) -> bool {
+    pub fn add_session(&mut self, session_id: &Option<Uuid>) -> bool {
         if !self.is_enabled() {
             return false;
         }
-        if session_id_is_good(session_id) && !self.store.contains_key(session_id) {
-            let session = Session::new(session_id);
-            self.store.insert(session_id.to_string(), session);
-            return true;
+        if session_id.is_none() {
+            return false;
+        }
+        if !self.store.contains_key(&session_id.unwrap()) {
+            if let Some(id) = session_id {
+                let session = Session::new(id.clone());
+                self.store.insert(*id, session);
+                return true;
+            }
         }
         false
     }
@@ -210,20 +207,16 @@ impl SessionManager {
     /// if a session does not exist, a session is created.
     /// The returned tuple contains the session id and a boolean, the boolean is true if the
     /// created session is new, if it is false, the session id is for an existing session.
-    pub fn get_or_create_session(&mut self, cookies: &Cookies) -> Option<(String, bool)>{
+    pub fn get_or_create_session(&mut self, cookies: &Cookies) -> Option<(Uuid, bool)>{
         if !self.is_enabled() {
             return None;
         }
-        let mut session_id = String::new();
+        let mut session_id = None;
 
         let mut is_new_session = false;
         if cookies.contains_key("id") {
-            session_id = match cookies.get("id") {
-                None => String::new(),
-                Some(thing) => {
-                    thing.value.clone()
-                }
-            };
+            session_id = cookies.get("id")
+                .map(|id| id.value.parse::<Uuid>().ok()).flatten();
             if !self.session_exists(&session_id) {
                 session_id = self.create_session();
                 is_new_session = true;
@@ -233,7 +226,11 @@ impl SessionManager {
             is_new_session = true;
         }
         self.try_prune();
-        Some((session_id, is_new_session))
+        if session_id.is_some() {
+            Some((session_id.unwrap(), is_new_session))
+        } else {
+            None
+        }
     }
 
     fn try_prune(&mut self) {
@@ -252,7 +249,7 @@ impl SessionManager {
 
         debug_println!("Pruning {} of {} sessions", to_remove.len(), self.store.len());
         for id in to_remove {
-            self.store.remove(id.as_str());
+            self.store.remove(&id);
         }
         self.store.shrink_to_fit();
     }
