@@ -64,6 +64,7 @@ fn web_server(ctx: &mut Context) {
                 b"html" => "text/html",
                 b"css" => "text/css",
                 b"js" => "application/javascript",
+                b"wasm" => "application/wasm",
                 b"txt" => "text/plain",
                 b"jpg" => "image/jpeg",
                 b"png" => "image/png",
