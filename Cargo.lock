@@ -332,7 +332,6 @@ dependencies = [
  "colored",
  "debug_print",
  "lazy_static",
- "log",
  "rand",
  "rayon",
  "scoped-thread-pool",
