@@ -1,19 +1,68 @@
 use std::fs::File;
 use std::io::{BufReader, Read};
+use std::net::{IpAddr, SocketAddr};
+use std::path::PathBuf;
+use std::sync::RwLock;
 
 use immortal_http::{Immortal, Context};
 
+use lazy_static::lazy_static;
+use clap::Parser;
+
+#[derive(Parser)]
+#[command()]
+struct Cli {
+    /// Ip address for the server
+    #[arg(short)]
+    ip: IpAddr,
+    /// Port for the server
+    #[arg(short)]
+    port: u16,
+    /// Directory from which files will be served over HTTP
+    #[arg(short)]
+    web_root: PathBuf,
+}
+
 fn main() {
+    let opts = Cli::parse();
+
+    let mut web_root = match std::env::current_dir() {
+        Ok(dir) => dir,
+        Err(e) => {
+            eprintln!("Error: {e}");
+            std::process::exit(1);
+        },
+    };
+
+    web_root.push(opts.web_root);
+
+    let web_root = match web_root.canonicalize() {
+        Ok(dir) => dir,
+        Err(e) => {
+            eprintln!("Error: Unable to canonicalize `{}`: {e}", web_root.display());
+            std::process::exit(1);
+        }
+    };
+
+    *WEB_ROOT.write().unwrap() = web_root;
+
+    let socket_addr = SocketAddr::from((opts.ip, opts.port));
+
     let mut immortal = Immortal::new();
     immortal.disable_sessions();
     immortal.fallback(web_server);
 
-    if let Err(e) = immortal.listen_with("127.0.0.1:7777", 4) {
-        panic!("{}", e);
+    if let Err(e) = immortal.listen_with(socket_addr, 4) {
+        panic!("Fatal error: {e}");
     }
 }
 
+lazy_static! {
+    static ref WEB_ROOT: RwLock<PathBuf> = RwLock::new(PathBuf::new());
+}
+
 fn web_server(ctx: &mut Context) {
+    let mut path = WEB_ROOT.read().unwrap().clone();
     let mut document = ctx.request.document.clone();
     document = collapse_chr(&document, '/');
     document = collapse_chr(&document, '.');
@@ -30,14 +79,6 @@ fn web_server(ctx: &mut Context) {
         return;
     }
 
-    let mut path = match std::env::current_dir() {
-        Ok(path) => path,
-        Err(why) => {
-            eprintln!("ERROR: {why}");
-            return;
-        },
-    };
-    path.push("webroot");
     path.push(document[1..].to_string());
 
     if path.exists() && path.is_file() {
