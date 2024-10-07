@@ -25,7 +25,7 @@ use std::time::Duration;
 use anyhow::{anyhow, Result};
 use chrono::Utc;
 use colored::*;
-use debug_print::debug_println;
+use debug_print::debug_eprintln;
 
 fn log(stream: &TcpStream, req: &Request, resp: &Response, sent: usize) {
     let remote_socket = match stream.peer_addr() {
@@ -85,13 +85,13 @@ fn handle_connection(
     let mut buf: [u8; 4096] = [0; 4096];
     let read_sz = match stream.read(&mut buf) {
         Err(e) => match e.kind() { _ => {
-            debug_println!("{}", e);
+            debug_eprintln!("{}", e);
             let _ = stream.shutdown(std::net::Shutdown::Both);
             return;
         }, },
         Ok(sz) => sz,
     };
-    debug_println!("SERVER <<< {read_sz} <<< {}", peer_addr.unwrap());
+    debug_eprintln!("SERVER <<< {read_sz} <<< {}", peer_addr.unwrap());
 
     match read_sz {
         //0 => break,
@@ -107,11 +107,11 @@ fn handle_connection(
                     match stream.write(response.serialize().as_slice()) {
                         Ok(sent) => {
                             log(&stream, &request, &response, sent);
-                            debug_println!("SERVER >>> {sent} >>> {}", peer_addr.unwrap());
+                            debug_eprintln!("SERVER >>> {sent} >>> {}", peer_addr.unwrap());
                         },
                         Err(_) => {
                             log(&stream, &request, &response, 0);
-                            debug_println!("SERVER >>> SEND ERROR >>> !");
+                            debug_eprintln!("SERVER >>> SEND ERROR >>> !");
                         },
                     }
                     let _ = stream.shutdown(std::net::Shutdown::Both);
@@ -130,7 +130,7 @@ fn handle_connection(
             match stream.write(response.serialize().as_slice()) {
                 Ok(sent) => {
                     log(&stream, &request, &response, sent);
-                    debug_println!("SERVER >>> {sent} >>> {}", peer_addr.unwrap());
+                    debug_eprintln!("SERVER >>> {sent} >>> {}", peer_addr.unwrap());
                 },
                 Err(_) => {
                     log(&stream, &request, &response, 0);

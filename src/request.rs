@@ -12,7 +12,7 @@ use super::{
 };
 
 use anyhow::{anyhow, Result};
-use debug_print::debug_println;
+use debug_print::debug_eprintln;
 
 pub type Cookies = HashMap<String, Cookie>;
 
@@ -67,7 +67,7 @@ impl Request {
             .collect::<Vec<&[u8]>>()
             .try_into() {
                 Err(_) => {
-                    debug_println!("ERROR: Invalid request line: {}", 
+                    debug_eprintln!("ERROR: Invalid request line: {}", 
                         str::from_utf8(request_line)
                             .unwrap_or(&format!("{:?}", request_line)));
                     return Err(
@@ -84,7 +84,7 @@ impl Request {
         let document = str::from_utf8(document)?.to_string();
 
         if !document.starts_with('/') {
-            debug_println!("ERROR: {document} does not start with /");
+            debug_eprintln!("ERROR: {document} does not start with /");
             return Err(
                 anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid document parameter"))
             );
@@ -100,7 +100,7 @@ impl Request {
             .collect::<Vec<&[u8]>>()
             .try_into() {
                 Err(_) => {
-                    debug_println!("ERROR: Invalid protocol string: {}", 
+                    debug_eprintln!("ERROR: Invalid protocol string: {}", 
                         str::from_utf8(request_line_items[2])
                             .unwrap_or(&format!("{:?}", request_line_items[2])));
                     return Err(
@@ -113,7 +113,7 @@ impl Request {
         let protocol = str::from_utf8(proto_version_items[0])?.to_string();
 
         if protocol != "HTTP" {
-            debug_println!("ERROR: Invalid protocol {protocol}");
+            debug_eprintln!("ERROR: Invalid protocol {protocol}");
             return Err(
                 anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid protocol in proto string"))
             );
@@ -124,7 +124,7 @@ impl Request {
             .to_string();
 
         if version != "1.1" {
-            debug_println!("ERROR: Invalid version {version}");
+            debug_eprintln!("ERROR: Invalid version {version}");
             return Err(
                 anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid version in proto string"))
             );
@@ -144,7 +144,7 @@ impl Request {
                 body = match body.get(..len) {
                     Some(slice) => slice.to_vec(),
                     None => {
-                        debug_println!("ERROR: Content-Length discrepancy {} != {}",
+                        debug_eprintln!("ERROR: Content-Length discrepancy {} != {}",
                                        len, body.len());
                         return Err(
                             anyhow!(io::Error::new(ErrorKind::InvalidInput, "Content-Length discrepancy"))
@@ -152,7 +152,7 @@ impl Request {
                     },
                 };
                 if len != body.len() {
-                    debug_println!("ERROR: Content-Length discrepancy {} != {}", len, body.len());
+                    debug_eprintln!("ERROR: Content-Length discrepancy {} != {}", len, body.len());
                     return Err(
                         anyhow!(io::Error::new(ErrorKind::InvalidInput, "Content-Length discrepancy"))
                     );
@@ -165,7 +165,7 @@ impl Request {
         let get = match parse_parameters(&query) {
             Ok(g) => g,
             Err(_) => {
-                debug_println!("ERROR: Invalid get parameters: {}", 
+                debug_eprintln!("ERROR: Invalid get parameters: {}", 
                     str::from_utf8(&body).unwrap_or(&format!("{:?}", query)));
                 HashMap::new()
             }
@@ -177,7 +177,7 @@ impl Request {
             match parse_parameters(str::from_utf8(&body).unwrap_or_default()) {
                 Ok(p) => p,
                 Err(_) => {
-                    debug_println!("ERROR: Invalid post parameters: {}", 
+                    debug_eprintln!("ERROR: Invalid post parameters: {}", 
                         str::from_utf8(&body).unwrap_or(&format!("{:?}", body)));
                     return Err(
                         anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid POST parameters"))

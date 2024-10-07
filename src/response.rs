@@ -7,7 +7,7 @@ use super::{
     cookie::Cookie,
 };
 
-use debug_print::debug_println;
+use debug_print::debug_eprintln;
 use lazy_static::lazy_static;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
@@ -121,7 +121,7 @@ impl Response<'_> {
         };
 
         if status.is_empty() {
-            debug_println!("ERROR: No default status string for HTTP {}, sending 500", self.code);
+            debug_eprintln!("ERROR: No default status string for HTTP {}, sending 500", self.code);
             self.code = "500";
             status = match STATUSES.get(self.code) {
                 None => "INTERNAL SERVER ERROR",

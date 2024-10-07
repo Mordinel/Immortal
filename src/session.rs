@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use super::request::Cookies;
 
-use debug_print::debug_println;
+use debug_print::debug_eprintln;
 
 pub type SessionManager = Arc<RwLock<InternalSessionManager>>;
 
@@ -247,7 +247,7 @@ impl InternalSessionManager {
             }
         }
 
-        debug_println!("Pruning {} of {} sessions", to_remove.len(), self.store.len());
+        debug_eprintln!("Pruning {} of {} sessions", to_remove.len(), self.store.len());
         for id in to_remove {
             self.store.remove(&id);
         }
