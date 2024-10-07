@@ -1,13 +1,7 @@
-use std::{
-    fs::File, 
-    io::{Read, BufReader},
-    os::unix::prelude::OsStrExt
-};
+use std::fs::File;
+use std::io::{BufReader, Read};
 
-use immortal_http::{
-    Immortal,
-    context::Context,
-};
+use immortal_http::{Immortal, Context};
 
 fn main() {
     let mut immortal = Immortal::new();
@@ -66,7 +60,7 @@ fn web_server(ctx: &mut Context) {
             },
         }
         ctx.response.headers.insert("Content-Type", match path.extension() {
-            Some(ext) => match ext.as_bytes() {
+            Some(ext) => match ext.as_encoded_bytes() {
                 b"html" => "text/html",
                 b"css" => "text/css",
                 b"js" => "application/javascript",

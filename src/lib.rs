@@ -8,12 +8,12 @@ pub mod router;
 pub mod session;
 pub mod util;
 
-use request::Request;
-use response::Response;
+pub use request::Request;
+pub use response::Response;
+pub use context::Context;
 use middleware::Middleware;
 use router::{Router, Handler};
 use session::{InternalSessionManager, SessionManager};
-use context::Context;
 use util::{strip_for_terminal, code_color};
 
 use std::{
