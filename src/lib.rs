@@ -16,13 +16,11 @@ use router::{Router, Handler};
 use session::{InternalSessionManager, SessionManager};
 use util::{strip_for_terminal, code_color};
 
-use std::{
-    io::{Read, Write},
-    net::{TcpListener, TcpStream},
-    sync::{Arc, RwLock},
-    time::Duration,
-    thread,
-};
+use std::io::{Read, Write};
+use std::net::{TcpListener, TcpStream, ToSocketAddrs};
+use std::sync::{Arc, RwLock};
+use std::thread;
+use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use chrono::Utc;
@@ -165,13 +163,13 @@ impl Immortal {
 
     /// Listens for incoming connections, with as many threads as the system has available for
     /// parallelism
-    pub fn listen(&self, socket_str: &str) -> Result<()> {
-        self.listen_with(socket_str, thread::available_parallelism()?.get())
+    pub fn listen<TSA: ToSocketAddrs>(&self, socket_addr: TSA) -> Result<()> {
+        self.listen_with(socket_addr, thread::available_parallelism()?.get())
     }
 
     /// Listens for incoming connections using a specific amount of threads
-    pub fn listen_with(&self, socket_str: &str, thread_count: usize) -> Result<()> {
-        let listener = TcpListener::bind(socket_str)?;
+    pub fn listen_with<TSA: ToSocketAddrs>(&self, socket_addr: TSA, thread_count: usize) -> Result<()> {
+        let listener = TcpListener::bind(socket_addr)?;
 
         match listener.local_addr() {
             Err(e) => return Err(anyhow!(e)),
