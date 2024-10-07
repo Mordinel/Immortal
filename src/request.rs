@@ -1,17 +1,13 @@
 
-use std::{
-    str, io,
-    io::ErrorKind,
-    collections::HashMap,
-    net::SocketAddr,
-};
+use std::fmt::Display;
+use std::str::{self, Utf8Error};
+use std::collections::HashMap;
+use std::net::SocketAddr;
+use std::{error, usize};
 
-use super::{
-    cookie::{Cookie, parse_cookies},
-    util::*,
-};
+use crate::cookie::{Cookie, parse_cookies};
+use crate::util::*;
 
-use anyhow::{anyhow, Result};
 use debug_print::debug_eprintln;
 
 pub type Cookies = HashMap<String, Cookie>;
@@ -19,8 +15,8 @@ pub type Cookies = HashMap<String, Cookie>;
 /// Request contains the request representation that is serialised from the main HTTP request from
 /// the socket.
 #[derive(Debug, Default)]
-pub struct Request {
-    pub body: Vec<u8>,
+pub struct Request<'buf> {
+    pub body: Option<&'buf [u8]>,
     pub method: String,
     pub document: String,
     pub query: String,
@@ -38,10 +34,41 @@ pub struct Request {
     pub peer_addr: Option<SocketAddr>,
 }
 
+#[derive(Debug)]
+pub enum RequestError<'buf> {
+    RequestLineMalformed(Vec<&'buf [u8]>),
+
+    DocumentNotUtf8(Utf8Error),
+    DocumentMalformed(&'buf [u8]),
+
+    MethodNotUtf8(Utf8Error),
+
+    QueryNotUtf8(Utf8Error),
+
+    ProtoNotUtf8(Utf8Error),
+    ProtoMalformed(&'buf [u8]),
+    ProtoInvalid(&'buf [u8]),
+
+    ProtoVersionNotUtf8(Utf8Error),
+    ProtoVersionInvalid(&'buf [u8]),
+
+    HeadersNotUtf8(Utf8Error),
+
+    ContentLengthDiscrepancy {expected: usize, got: usize },
+
+    PostParamsMalformed(&'buf [u8]),
+}
+impl<'buf> Display for RequestError<'buf> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+impl<'buf> error::Error for RequestError<'buf> {}
+
 #[allow(dead_code)]
-impl Request {
+impl<'buf> Request<'buf> {
     /// Construct a new request object using only a slice of u8
-    pub fn from_slice(buf: &[u8]) -> Result<Self> {
+    pub fn from_slice(buf: &'buf [u8]) -> Result<Self, RequestError> {
         Self::new(buf, None)
     }
 
@@ -51,48 +78,43 @@ impl Request {
     }
 
     /// Construct a new request object, parsing the request buffer
-    pub fn new(buf: &[u8], peer_addr: Option<&SocketAddr>) -> Result<Self> {
+    pub fn new(
+        buf: &'buf [u8],
+        peer_addr: Option<&SocketAddr>
+    ) -> Result<Self, RequestError<'buf>> {
         // parse body
         let (request_head, request_body) = request_head_body_split(buf);
 
-        let mut body = match request_body {
-            None => vec![],
-            Some(thing) => thing.to_vec(),
-        };
+        let body = request_body;
 
         let (request_line, request_headers) = request_line_header_split(request_head);
 
-        let request_line_items: [&[u8]; 3] = match request_line
+        let request_line_items: [&[u8]; 3] = request_line
             .split(|c| *c == b' ')
             .collect::<Vec<&[u8]>>()
-            .try_into() {
-                Err(_) => {
-                    debug_eprintln!("ERROR: Invalid request line: {}", 
-                        str::from_utf8(request_line)
-                            .unwrap_or(&format!("{:?}", request_line)));
-                    return Err(
-                        anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid request line"))
-                    );
-                },
-                Ok(items) => items,
-        };
+            .try_into()
+            .map_err(|e| RequestError::RequestLineMalformed(e))?;
 
-        let method = str::from_utf8(&request_line_items[0].to_ascii_uppercase())?.to_string();
+        let method = str::from_utf8(&request_line_items[0].to_ascii_uppercase())
+            .map_err(RequestError::MethodNotUtf8)?
+            .to_string();
 
-        let (document, query) = split_once(request_line_items[1], b'?');
+        let (document_slice, query) = split_once(request_line_items[1], b'?');
 
-        let document = str::from_utf8(document)?.to_string();
+        let document = str::from_utf8(document_slice)
+            .map_err(RequestError::DocumentNotUtf8)?
+            .to_string();
 
         if !document.starts_with('/') {
             debug_eprintln!("ERROR: {document} does not start with /");
-            return Err(
-                anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid document parameter"))
-            );
+            return Err(RequestError::DocumentMalformed(document_slice));
         }
 
         let query = match query {
             None => "".to_string(),
-            Some(thing) => str::from_utf8(thing)?.to_string(),
+            Some(thing) => str::from_utf8(thing)
+                .map_err(RequestError::QueryNotUtf8)?
+                .to_string(),
         };
         
         let proto_version_items: [&[u8]; 2] = match request_line_items[2]
@@ -103,34 +125,32 @@ impl Request {
                     debug_eprintln!("ERROR: Invalid protocol string: {}", 
                         str::from_utf8(request_line_items[2])
                             .unwrap_or(&format!("{:?}", request_line_items[2])));
-                    return Err(
-                        anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid proto string"))
-                    );
+                    return Err(RequestError::ProtoMalformed(request_line_items[2]));
                 },
                 Ok(items) => items,
         };
 
-        let protocol = str::from_utf8(proto_version_items[0])?.to_string();
+        let protocol = str::from_utf8(proto_version_items[0])
+            .map_err(RequestError::ProtoNotUtf8)?
+            .to_string();
 
         if protocol != "HTTP" {
             debug_eprintln!("ERROR: Invalid protocol {protocol}");
-            return Err(
-                anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid protocol in proto string"))
-            );
+            return Err(RequestError::ProtoInvalid(request_line));
         }
 
-        let version = str::from_utf8(proto_version_items[1])?
+        let version = str::from_utf8(proto_version_items[1])
+            .map_err(RequestError::ProtoVersionNotUtf8)?
             .trim_end_matches(|c| c == '\r' || c == '\n' || c == '\0')
             .to_string();
 
         if version != "1.1" {
             debug_eprintln!("ERROR: Invalid version {version}");
-            return Err(
-                anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid version in proto string"))
-            );
+            return Err(RequestError::ProtoVersionInvalid(request_line));
         }
 
-        let headers = parse_headers(request_headers.unwrap_or_default())?;
+        let headers = parse_headers(request_headers.unwrap_or_default())
+            .map_err(RequestError::HeadersNotUtf8)?;
 
         let host = collect_header(&headers, "Host");
         let user_agent = collect_header(&headers, "User-Agent");
@@ -141,24 +161,24 @@ impl Request {
         let content_length = match content_length.parse::<usize>() {
             Err(_) => None,
             Ok(len) => {
-                body = match body.get(..len) {
-                    Some(slice) => slice.to_vec(),
-                    None => {
-                        debug_eprintln!("ERROR: Content-Length discrepancy {} != {}",
-                                       len, body.len());
-                        return Err(
-                            anyhow!(io::Error::new(ErrorKind::InvalidInput, "Content-Length discrepancy"))
-                        );
-                    },
-                };
-                if len != body.len() {
-                    debug_eprintln!("ERROR: Content-Length discrepancy {} != {}", len, body.len());
-                    return Err(
-                        anyhow!(io::Error::new(ErrorKind::InvalidInput, "Content-Length discrepancy"))
-                    );
+                if let Some(mut body) = body {
+                    body = match body.get(..len) {
+                        Some(slice) => slice,
+                        None => {
+                            debug_eprintln!("ERROR: Content-Length discrepancy {} != {}",
+                                len, body.len());
+                            return Err(RequestError::ContentLengthDiscrepancy { expected: len, got: body.len() });
+                        },
+                    };
+                    if len != body.len() {
+                        debug_eprintln!("ERROR: Content-Length discrepancy {} != {}", len, body.len());
+                        return Err(RequestError::ContentLengthDiscrepancy { expected: len, got: body.len() });
 
+                    }
+                    Some(len)
+                } else {
+                    None
                 }
-                Some(len)
             },
         };
 
@@ -166,22 +186,21 @@ impl Request {
             Ok(g) => g,
             Err(_) => {
                 debug_eprintln!("ERROR: Invalid get parameters: {}", 
-                    str::from_utf8(&body).unwrap_or(&format!("{:?}", query)));
+                    format!("{:?}", query));
                 HashMap::new()
             }
         };
 
         let post = if method == "POST"
                 && content_type == "application/x-www-form-urlencoded"
-                && content_length.is_some() {
+                && content_length.is_some() && body.is_some() {
+            let body = body.unwrap();
             match parse_parameters(str::from_utf8(&body).unwrap_or_default()) {
                 Ok(p) => p,
                 Err(_) => {
                     debug_eprintln!("ERROR: Invalid post parameters: {}", 
                         str::from_utf8(&body).unwrap_or(&format!("{:?}", body)));
-                    return Err(
-                        anyhow!(io::Error::new(ErrorKind::InvalidInput, "Invalid POST parameters"))
-                    );
+                    return Err(RequestError::PostParamsMalformed(body));
                 }
             }
         } else {

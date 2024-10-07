@@ -10,7 +10,7 @@ use super::{
 /// Context is a structure that is exposed to the programmer when registering closures as
 /// request handlers.
 pub struct Context<'a, 'b> {
-    pub request: &'a Request,
+    pub request: &'a Request<'b>,
     pub response: &'a mut Response<'b>,
     pub session_id: Option<Uuid>,
     session_manager: &'a SessionManager,
@@ -18,7 +18,7 @@ pub struct Context<'a, 'b> {
 
 #[allow(dead_code)]
 impl<'a, 'b> Context<'a, 'b> {
-    pub fn new(request: &'a Request,
+    pub fn new(request: &'a Request<'b>,
                response: &'a mut Response<'b>, 
                session_id: Option<Uuid>,
                session_manager: &'a SessionManager) -> Self {

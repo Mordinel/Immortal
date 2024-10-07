@@ -1,14 +1,10 @@
+#![feature(iter_intersperse)]
+
 #[cfg(test)]
 mod tests {
 
-    use immortal_http::{
-        Immortal,
-        request::Request,
-    };
-
-    use std::io;
-    use std::io::ErrorKind;
-    use std::str::Utf8Error;
+    use immortal_http::request::{Request, RequestError};
+    use immortal_http::Immortal;
 
     #[test]
     fn test_middleware_redirects() {
@@ -70,7 +66,7 @@ mod tests {
         assert_eq!(request.host, "127.0.0.1");
         assert_eq!(request.content_type, "some_content_type");
         assert_eq!(request.content_length, Some(13));
-        assert_eq!(request.body, b"Hello, World!");
+        assert_eq!(request.body, Some(b"Hello, World!".as_slice()));
         assert_eq!(request.header(""), None);
         assert_eq!(request.header("8&&&x"), None);
         assert_eq!(request.header("X-Test-Header").unwrap(), "test");
@@ -89,9 +85,9 @@ mod tests {
         buffer.append(&mut query.to_vec());
         let request = Request::from_slice(buffer.as_mut_slice()).unwrap();
 
-        assert_eq!(request.post("param_one").unwrap(), "val_one");
-        assert_eq!(request.post("param_two").unwrap(), "val=two");
-        assert_eq!(request.post("param_three").unwrap(), "val three");
+        assert_eq!(request.post("param_one"), Some("val_one"));
+        assert_eq!(request.post("param_two"), Some("val=two"));
+        assert_eq!(request.post("param_three"), Some("val three"));
     }
 
     #[test]
@@ -146,7 +142,7 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_input() {
+    fn test_invalid_structure() {
         let mut cases: Vec<Vec<u8>> = Vec::new();
 
         let mut buffer = b"".to_vec();
@@ -164,20 +160,22 @@ mod tests {
         buffer = b"GET / HTTP/1.0".to_vec();
         cases.push(buffer);
 
-        for mut buf in cases {
-            let request = Request::from_slice(buf.as_mut_slice());
+        for buf in cases {
+            let request = Request::from_slice(buf.as_slice());
             let error = request.unwrap_err();
-            match error.downcast_ref::<io::Error>() {
-                Some(err) => {
-                    assert_eq!(err.kind(), ErrorKind::InvalidInput);
-                }
-                None => panic!("Expected to be io::Error"),
+            match error {
+                RequestError::RequestLineMalformed(b) => assert_eq!(buf, b.join(b" ".as_slice())),
+                RequestError::ProtoInvalid(b) => assert_eq!(buf.as_slice(), b),
+                RequestError::ProtoVersionInvalid(b) => assert_eq!(buf.as_slice(), b),
+                RequestError::ProtoMalformed(b) => assert_eq!(buf.as_slice(), b),
+                RequestError::DocumentMalformed(b) => assert_eq!(buf.as_slice(), b),
+                _ => panic!(),
             }
         }
     }
 
     #[test]
-    fn test_invalid_data() {
+    fn test_invalid_encoding() {
         let mut cases: Vec<Vec<u8>> = Vec::new();
 
         let mut buffer = b"GE\xffT / HTTP/1.1".to_vec();
@@ -203,9 +201,14 @@ mod tests {
         for mut buf in cases {
             let request = Request::from_slice(buf.as_mut_slice());
             let error = request.unwrap_err();
-            assert!(match error.downcast_ref::<Utf8Error>() {
-                Some(_) => true,
-                None => false,
+            assert!(match error {
+                RequestError::QueryNotUtf8(..) => true,
+                RequestError::ProtoNotUtf8(..) => true,
+                RequestError::MethodNotUtf8(..) => true,
+                RequestError::HeadersNotUtf8(..) => true,
+                RequestError::DocumentNotUtf8(..) => true,
+                RequestError::ProtoVersionNotUtf8(..) => true,
+                _ => false,
             });
         }
     }

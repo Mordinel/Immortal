@@ -1,13 +1,24 @@
 
-use std::{
-    str,
-    str::Utf8Error,
-    collections::HashMap,
-};
+use std::collections::HashMap;
+use std::fmt::Display;
+use std::str::{self, Utf8Error};
+use std::error;
 
 use super::response::Response;
 
 use colored::{Colorize, ColoredString};
+
+#[derive(Debug)]
+pub enum ParseError {
+    ParamNameInvalid(String),
+    UrlDecodeNotUtf8(Utf8Error),
+}
+impl Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+impl error::Error for ParseError {}
 
 /// colours an HTTP code appropriately
 pub fn code_color(code: &str) -> ColoredString {
@@ -73,7 +84,7 @@ fn from_hex(byte: u8) -> Option<u8> {
 }
 
 /// Accept a string, perform URL decoding on the string and return the result
-pub fn url_decode(to_decode: &str) -> Result<String, Utf8Error> {
+pub fn url_decode(to_decode: &str) -> Result<String, ParseError> {
     let mut build: Vec<u8> = Vec::with_capacity(to_decode.len());
     let mut bytes = to_decode.bytes();
     while let Some(c) = bytes.next() {
@@ -113,12 +124,12 @@ pub fn url_decode(to_decode: &str) -> Result<String, Utf8Error> {
     }
 
     // validate if is still utf8
-    Ok(str::from_utf8(&build)?.to_string())
+    Ok(str::from_utf8(&build)
+        .map_err(ParseError::UrlDecodeNotUtf8)?.to_string())
 }
 
 /// Parses an HTTP query string into a key-value hashmap
-#[allow(clippy::result_unit_err)]
-pub fn parse_parameters(to_parse: &str) -> Result<HashMap<String, String>, ()> {
+pub fn parse_parameters(to_parse: &str) -> Result<HashMap<String, String>, ParseError> {
     if to_parse.is_empty() {
         return Ok(HashMap::new());
     }
@@ -167,7 +178,7 @@ pub fn parse_parameters(to_parse: &str) -> Result<HashMap<String, String>, ()> {
                             };
                             params.insert(name.clone(), value.clone());
                         } else {
-                            return Err(());
+                            return Err(ParseError::ParamNameInvalid(name.to_string()));
                         }
                         state = ParseState::Name;
                     }
@@ -197,11 +208,6 @@ pub fn parse_parameters(to_parse: &str) -> Result<HashMap<String, String>, ()> {
 /// parse these into a hashmap of key-value pairs where keys have all ascii values as uppercase.
 pub fn parse_headers(to_parse: &[u8]) -> Result<HashMap<String, String>, Utf8Error> {
     let to_parse = str::from_utf8(to_parse)?;
-    //let to_parse = match str::from_utf8(to_parse) {
-    //    Err(e) => return Err(Error::new(ErrorKind::InvalidData, format!("{}", e))),
-    //    Ok(s) => s.trim_end_matches(|c| c == '\0'), // could be the rest of the recv buffer if
-    //                                                // we're not careful
-    //};
 
     if to_parse.is_empty() {
         return Ok(HashMap::new());
@@ -261,7 +267,7 @@ pub fn is_param_name_valid(param: &str) -> bool {
 /// first being the slice content up to the first instance of item `by`, and the second being the
 /// slice content after the first instance of `by`.
 /// 
-/// This exists because there is no split_once in a slice, only for strings
+/// This exists because there is no stable split_once for u8 slices
 pub fn split_once(to_split: &[u8], by: u8) -> (&[u8], Option<&[u8]>) {
     let mut found_idx = 0;
 

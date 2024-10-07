@@ -111,7 +111,7 @@ fn main() {
         ctx.response.body.append("<h1>This is the super secret page</h1>".as_bytes().to_vec().as_mut());
     });
 
-    if let Err(e) = immortal.listen("127.0.0.1:7777") {
+    if let Err(e) = immortal.listen(([127, 0, 0, 1], 7777)) {
         panic!("{}", e);
     }
 }

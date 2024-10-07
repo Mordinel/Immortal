@@ -19,7 +19,7 @@ mod tests {
     fn test_url_decode_invalid_utf8() {
         let to_decode = String::from("%ff");
         match url_decode(&to_decode) {
-            Err(e) => assert_eq!(e.valid_up_to(), 0),
+            Err(ParseError::UrlDecodeNotUtf8(e)) => assert_eq!(e.valid_up_to(), 0),
             _ => panic!("Expected Err()"),
         }
     }
@@ -58,8 +58,8 @@ mod tests {
         buffer.append(&mut b"X-Some-Other-Header: some other value".to_vec());
         let headers = parse_headers(buffer.as_mut_slice()).unwrap();
         assert_eq!(headers.len(), 2);
-        assert_eq!(headers.get("X-SOME-HEADER").unwrap(), "some value");
-        assert_eq!(headers.get("X-SOME-OTHER-HEADER").unwrap(), "some other value");
+        assert_eq!(*headers.get("X-SOME-HEADER").unwrap(), "some value");
+        assert_eq!(*headers.get("X-SOME-OTHER-HEADER").unwrap(), "some other value");
     }
 
     #[test]

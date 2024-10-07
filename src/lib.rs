@@ -9,6 +9,7 @@ pub mod session;
 pub mod util;
 
 pub use request::Request;
+use request::RequestError;
 pub use response::Response;
 pub use context::Context;
 use middleware::Middleware;
@@ -16,16 +17,35 @@ use router::{Router, Handler};
 use session::{InternalSessionManager, SessionManager};
 use util::{strip_for_terminal, code_color};
 
-use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream, ToSocketAddrs};
-use std::sync::{Arc, RwLock};
-use std::thread;
+use std::fmt::Display;
+use std::io::{self, Read, Write};
+use std::net::{TcpListener, TcpStream, SocketAddr};
 use std::time::Duration;
+use std::error;
+use std::thread;
+use std::sync::{Arc, RwLock};
 
-use anyhow::{anyhow, Result};
 use chrono::Utc;
 use colored::*;
-use debug_print::debug_eprintln;
+use debug_print::{debug_eprintln, debug_println};
+
+#[derive(Debug)]
+pub enum ImmortalError<'a> {
+    /// Io: std::io::Error
+    Io(io::Error),
+    /// Rayon: Thread Pool Build Error
+    Tpbe(rayon::ThreadPoolBuildError),
+    /// TCP accept() failed
+    AcceptError(io::Error),
+    RequestError(RequestError<'a>),
+}
+
+impl<'a> Display for ImmortalError<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+impl<'a> error::Error for ImmortalError<'a> {}
 
 fn log(stream: &TcpStream, req: &Request, resp: &Response, sent: usize) {
     let remote_socket = match stream.peer_addr() {
@@ -163,33 +183,53 @@ impl Immortal {
 
     /// Listens for incoming connections, with as many threads as the system has available for
     /// parallelism
-    pub fn listen<TSA: ToSocketAddrs>(&self, socket_addr: TSA) -> Result<()> {
-        self.listen_with(socket_addr, thread::available_parallelism()?.get())
+    pub fn listen<S>(
+        &self,
+        socket_addr: S
+    ) -> Result<(), ImmortalError> where S: Into<SocketAddr> {
+        self.listen_with(
+            socket_addr,
+            thread::available_parallelism()
+                .map_err(ImmortalError::Io)?
+                .get(),
+        )
     }
 
     /// Listens for incoming connections using a specific amount of threads
-    pub fn listen_with<TSA: ToSocketAddrs>(&self, socket_addr: TSA, thread_count: usize) -> Result<()> {
-        let listener = TcpListener::bind(socket_addr)?;
+    pub fn listen_with<S>(
+        &self,
+        socket_addr: S,
+        thread_count: usize
+    ) -> Result<(), ImmortalError> where S: Into<SocketAddr> {
+        let socket_addr: SocketAddr = socket_addr.into();
+        let listener = TcpListener::bind(socket_addr)
+            .map_err(ImmortalError::Io)?;
 
-        match listener.local_addr() {
-            Err(e) => return Err(anyhow!(e)),
-            Ok(socket) => println!("Server starting at: http://{}", socket),
-        };
+        println!("Server starting at: http://{socket_addr}");
 
         let thread_pool = rayon::ThreadPoolBuilder::new()
             .num_threads(thread_count)
-            .build()?;
+            .build()
+            .map_err(ImmortalError::Tpbe)?;
 
-        let _ = thread_pool.scope(|scope| {
-            for stream in listener.incoming() {
-                match stream {
-                    Err(e) => return Err(anyhow!(e)),
-                    Ok(stream) => scope.spawn(|_s| {
-                        handle_connection(stream, &self.session_manager, &self.middleware, &self.router);
-                    }),
-                };
-            };
-            Ok(())
+        let _ = thread_pool.scope(|scope| -> Result<(), ImmortalError> {
+
+            loop {
+                let (stream, peer_addr) = listener.accept()
+                    .map_err(ImmortalError::AcceptError)?;
+                debug_println!("New client on [{peer_addr}]");
+
+
+                scope.spawn(|_s| {
+                    handle_connection(
+                        stream,
+                        &self.session_manager,
+                        &self.middleware,
+                        &self.router,
+                    );
+                });
+            }
+
         });
         Ok(())
     }
