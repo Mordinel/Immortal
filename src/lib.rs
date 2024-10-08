@@ -1,5 +1,14 @@
 #![feature(iter_intersperse)]
 
+use std::fmt::Display;
+use std::io::{self, Read, Write};
+use std::net::{TcpListener, TcpStream, SocketAddr};
+use std::sync::atomic::AtomicBool;
+use std::time::Duration;
+use std::error;
+use std::thread::{self, JoinHandle};
+use std::sync::Arc;
+
 pub mod context;
 pub mod cookie;
 pub mod middleware;
@@ -18,15 +27,6 @@ use router::{Router, Handler};
 use session::SessionManager;
 use util::{strip_for_terminal, code_color};
 use uuid::Uuid;
-
-use std::fmt::Display;
-use std::io::{self, Read, Write};
-use std::net::{TcpListener, TcpStream, SocketAddr};
-use std::sync::atomic::AtomicBool;
-use std::time::Duration;
-use std::error;
-use std::thread::{self, JoinHandle};
-use std::sync::Arc;
 
 use chrono::Utc;
 use colored::*;
@@ -51,6 +51,7 @@ impl Display for ImmortalError<'_> {
 }
 impl error::Error for ImmortalError<'_> {}
 
+#[inline]
 fn log(stream: &TcpStream, req: &Request, resp: &Response, sent: usize) {
     let remote_socket = match stream.peer_addr() {
         Err(_) => "<no socket>".red().bold(),
@@ -95,6 +96,18 @@ fn log(stream: &TcpStream, req: &Request, resp: &Response, sent: usize) {
              user_agent);
 }
 
+#[inline]
+fn stream_write(stream: &mut TcpStream, request: &Request, response: &mut Response) {
+    match stream.write(response.serialize().as_slice()) {
+        Ok(sent) => {
+            log(&stream, &request, &response, sent);
+        },
+        Err(_) => {
+            log(&stream, &request, &response, 0);
+        },
+    }
+}
+
 /// Reads the TcpStream and handles errors while reading
 fn handle_connection(
     mut stream: TcpStream,
@@ -124,17 +137,18 @@ fn handle_connection(
         },
         _ => {
             let mut request = match Request::new(&buf, peer_addr.as_ref()) {
+                Err(RequestError::ProtoVersionInvalid(_)) => {
+                    let request = Request::bad();
+                    let mut response = Response::bad();
+                    response.code = "505";
+                    stream_write(&mut stream, &request, &mut response);
+                    let _ = stream.shutdown(std::net::Shutdown::Both);
+                    return;
+                },
                 Err(_) => {
                     let request = Request::bad();
                     let mut response = Response::bad();
-                    match stream.write(response.serialize().as_slice()) {
-                        Ok(sent) => {
-                            log(&stream, &request, &response, sent);
-                        },
-                        Err(_) => {
-                            log(&stream, &request, &response, 0);
-                        },
-                    }
+                    stream_write(&mut stream, &request, &mut response);
                     let _ = stream.shutdown(std::net::Shutdown::Both);
                     return;
                 },
@@ -148,14 +162,7 @@ fn handle_connection(
             middleware.run(&mut ctx);
             router.call(&mut ctx);
 
-            match stream.write(response.serialize().as_slice()) {
-                Ok(sent) => {
-                    log(&stream, &request, &response, sent);
-                },
-                Err(_) => {
-                    log(&stream, &request, &response, 0);
-                },
-            };
+            stream_write(&mut stream, &request, &mut response);
         },
     };
     let _ = stream.shutdown(std::net::Shutdown::Both);

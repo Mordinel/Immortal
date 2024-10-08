@@ -81,8 +81,15 @@ impl<'buf> Request<'buf> {
         buf: &'buf [u8],
         peer_addr: Option<&SocketAddr>
     ) -> Result<Self, RequestError<'buf>> {
-        // parse body
-        let (request_head, request_body) = request_head_body_split(buf);
+        let (mut request_head, request_body) = request_head_body_split(buf);
+
+        // ignore preceding clrf if they exist
+        loop {
+            request_head = match request_head.strip_prefix(b"\r\n") {
+                Some(head) => head,
+                None => break,
+            };
+        }
 
         let body = request_body;
 

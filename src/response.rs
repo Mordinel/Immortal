@@ -29,6 +29,7 @@ lazy_static! {
             ( "451".to_string(), "UNAVAILABLE FOR LEGAL REASONS".to_string() ),
             ( "500".to_string(), "INTERNAL SERVER ERROR".to_string() ),
             ( "501".to_string(), "NOT IMPLEMENTED".to_string() ),
+            ( "505".to_string(), "HTTP VERSION NOT SUPPORTED".to_string() ),
         ]);
 }
 
