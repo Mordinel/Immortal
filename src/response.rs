@@ -1,11 +1,10 @@
 
 use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 
-use super::{
-    session::{InternalSessionManager, SessionManager},
-    request::Request,
-    cookie::Cookie,
-};
+use crate::session::SessionManager;
+use crate::request::Request;
+use crate::cookie::Cookie;
 
 use debug_print::debug_eprintln;
 use lazy_static::lazy_static;
@@ -46,32 +45,42 @@ pub struct Response<'a> {
 
 impl Response<'_> {
     /// Constructs a default response based on the passed request.
-    pub fn new(req: &mut Request, session_manager: &SessionManager, session_id: &mut Option<Uuid>) -> Self {
+    pub fn new(
+        req: &mut Request,
+        session_manager: Arc<RwLock<SessionManager>>,
+        session_id: &mut Uuid
+    ) -> Self {
         let mut headers: HashMap<&str, String> = HashMap::new();
 
         // default headers
         headers.insert("Connection", "close".to_string());
         headers.insert("Content-Type", "text/html".to_string());
 
-        let mut session_manager = session_manager.write().unwrap();
-
-        if session_manager.is_enabled() {
+        let sm_is_enabled = session_manager.read().unwrap().is_enabled();
+        if sm_is_enabled {
             if let Some(cookie) = req.cookies.get("id") {
                 if let Ok(id) = cookie.value.parse::<Uuid>() {
-                    *session_id = Some(id);
+                    *session_id = id;
                 }
             }
         }
 
+        let mut sm = session_manager.write().unwrap();
+        let sm_should_gen_id = sm.is_enabled() 
+                && !sm.add_session(*session_id) 
+                && !sm.session_exists(*session_id);
+        drop(sm);
+
         let mut should_add_cookie = false;
-        if session_manager.is_enabled() && !session_manager.add_session(session_id) && !session_manager.session_exists(session_id) {
-            *session_id = Some(InternalSessionManager::generate_id());
+        if sm_should_gen_id {
+            *session_id = SessionManager::generate_id();
             should_add_cookie = true;
         }
 
         let mut cookies: Vec<Cookie> = Vec::new();
-        if session_manager.is_enabled() && should_add_cookie {
-            if let Some(session_id) = session_id {
+        let sm_is_enabled = session_manager.read().unwrap().is_enabled();
+        if sm_is_enabled && should_add_cookie {
+            if !session_id.is_nil() {
                 let cookie = Cookie::builder()
                     .name("id")
                     .value(session_id.to_string().as_ref())

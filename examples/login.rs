@@ -10,8 +10,8 @@ use immortal_http::{
 fn main() {
     let mut immortal = Immortal::new();
 
-    immortal.set_expiry_duration(Duration::from_secs(600));
-    immortal.set_prune_duration(Duration::from_secs(60));
+    immortal.set_inactive_duration(Duration::from_secs(600));
+    immortal.set_prune_rate(Duration::from_secs(60));
 
     immortal.fallback(|ctx| {
         ctx.response.code = "404";
@@ -117,35 +117,32 @@ fn main() {
 }
 
 fn get_username(ctx: &mut Context) -> Option<String> {
-    ctx.read_session(&ctx.session_id, "username")
+    ctx.read_session(ctx.session_id, "username")
 }
 
 fn log_out(ctx: &mut Context) {
-    let id = ctx.session_id.clone();
-    ctx.write_session(&id, "username", "");
+    ctx.write_session(ctx.session_id, "username", "");
 }
 
 fn log_in(ctx: &mut Context, username: &str) {
-    let id = ctx.session_id.clone();
-    ctx.delete_session(&id);
+    ctx.delete_session(ctx.session_id);
 
     let session_id = ctx.new_session();
-    if let Some(id) = session_id {
+    if !session_id.is_nil() {
         ctx.response.cookies.push(
-            Cookie::builder().name("id").value(&id.to_string()).http_only(true).build()
+            Cookie::builder().name("id").value(&session_id.to_string()).http_only(true).build()
             );
-        ctx.write_session(&session_id, "username", username);
+        ctx.write_session(session_id, "username", username);
         ctx.session_id = session_id;
     }
 }
 
 fn get_message(ctx: &mut Context) -> Option<String> {
-    ctx.read_session(&ctx.session_id, "message")
+    ctx.read_session(ctx.session_id, "message")
 }
 
 fn set_message(ctx: &mut Context, message: &str) {
-    let id = ctx.session_id.clone();
-    ctx.write_session(&id, "message", message);
+    ctx.write_session(ctx.session_id, "message", message);
 }
 
 fn clear_message(ctx: &mut Context) {

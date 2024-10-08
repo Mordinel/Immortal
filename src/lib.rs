@@ -14,8 +14,9 @@ pub use response::Response;
 pub use context::Context;
 use middleware::Middleware;
 use router::{Router, Handler};
-use session::{InternalSessionManager, SessionManager};
+use session::SessionManager;
 use util::{strip_for_terminal, code_color};
+use uuid::Uuid;
 
 use std::fmt::Display;
 use std::io::{self, Read, Write};
@@ -94,7 +95,7 @@ fn log(stream: &TcpStream, req: &Request, resp: &Response, sent: usize) {
 /// Reads the TcpStream and handles errors while reading
 fn handle_connection(
     mut stream: TcpStream,
-    session_manager: &SessionManager,
+    session_manager: Arc<RwLock<SessionManager>>,
     middleware: &Middleware,
     router: &Router
 ) {
@@ -137,9 +138,9 @@ fn handle_connection(
                 Ok(req) => req,
             };
 
-            let mut session_id = None;
-            let mut response = Response::new(&mut request, session_manager, &mut session_id);
-            let mut ctx = Context::new(&request, &mut response, session_id, session_manager);
+            let mut session_id = Uuid::nil();
+            let mut response = Response::new(&mut request, session_manager.clone(), &mut session_id);
+            let mut ctx = Context::new(&request, &mut response, session_id, session_manager.clone());
 
             middleware.run(&mut ctx);
             router.call(&request.method, &mut ctx);
@@ -162,7 +163,7 @@ fn handle_connection(
 pub struct Immortal {
     middleware: Middleware,
     router: Router,
-    session_manager: SessionManager,
+    session_manager: Arc<RwLock<SessionManager>>,
 }
 
 #[allow(dead_code)]
@@ -172,7 +173,7 @@ impl Immortal {
         Self {
             middleware: Middleware::new(),
             router: Router::new(),
-            session_manager: Arc::new(RwLock::new(InternalSessionManager::default())),
+            session_manager: Arc::new(RwLock::new(SessionManager::default())),
         }
     }
 
@@ -214,17 +215,16 @@ impl Immortal {
                     .map_err(ImmortalError::AcceptError)?;
                 debug_println!("New client on [{}]", _peer_addr);
 
-
+                let session_manager_clone = self.session_manager.clone();
                 scope.spawn(|_s| {
                     handle_connection(
                         stream,
-                        &self.session_manager,
+                        session_manager_clone,
                         &self.middleware,
                         &self.router,
                     );
                 });
             }
-
         });
         Ok(())
     }
@@ -237,9 +237,9 @@ impl Immortal {
             Ok(req) => req,
         };
 
-        let mut session_id = None;
-        let mut response = Response::new(&mut request, &self.session_manager, &mut session_id);
-        let mut ctx = Context::new(&request, &mut response, session_id, &self.session_manager);
+        let mut session_id = Uuid::nil();
+        let mut response = Response::new(&mut request, self.session_manager.clone(), &mut session_id);
+        let mut ctx = Context::new(&request, &mut response, session_id, self.session_manager.clone());
 
         self.middleware.run(&mut ctx);
         self.router.call(&request.method, &mut ctx);
@@ -268,20 +268,20 @@ impl Immortal {
         self.router.unregister(method, route)
     }
 
-    /// Registers the fallback function for no method/route match requests, or for if your
-    /// implementation handles this.
+    /// Registers the fallback function for when a request is not caught by the router
+    /// or for if you want to handle all requests manually
     pub fn fallback(&mut self, func: Handler) {
         self.router.fallback = func;
     }
 
     /// Sets the server-side session expiry duration
-    pub fn set_expiry_duration(&mut self, duration: Duration) {
-        self.session_manager.write().unwrap().set_expiry_duration(duration);
+    pub fn set_inactive_duration(&mut self, duration: Duration) {
+        self.session_manager.write().unwrap().set_inactive_duration(duration);
     }
 
-    /// Sets the server-side session prune duration
-    pub fn set_prune_duration(&mut self, duration: Duration) {
-        self.session_manager.write().unwrap().set_prune_duration(duration);
+    /// Sets the prune rate for sessions, will attempt to prune old sessions every `duration`
+    pub fn set_prune_rate(&mut self, duration: Duration) {
+        self.session_manager.write().unwrap().set_prune_rate(duration);
     }
 
     /// configures sessions to be disabled, clears existing server-side sessions

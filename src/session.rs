@@ -1,58 +1,68 @@
-use std::{
-    collections::HashMap,
-    time::{Instant, Duration},
-    sync::{Arc, RwLock},
-};
+use std::collections::HashMap;
+use std::time::{Instant, Duration};
+use std::sync::RwLock;
 
 use uuid::Uuid;
+use debug_print::debug_eprintln;
 
 use super::request::Cookies;
 
-use debug_print::debug_eprintln;
-
-pub type SessionManager = Arc<RwLock<InternalSessionManager>>;
-
-#[allow(dead_code)]
 pub struct Session {
-    id: Uuid,
     data: HashMap<String, String>,
+    created: Instant,
     last_mutated: Instant,
+    last_accessed: RwLock<Instant>,
 }
 
 impl Session {
-    fn new(id: Uuid) -> Session {
+    fn new() -> Session {
+        let now = Instant::now();
         Session {
-            id,
             data: HashMap::new(),
-            last_mutated: Instant::now(),
+            created: now,
+            last_mutated: now,
+            last_accessed: now.into(),
         }
     }
 }
 
-pub type SessionStore = HashMap<Uuid, Session>;
-
 /// provides APIs to interact with user session stores.
-pub struct InternalSessionManager {
+pub struct SessionManager {
     is_enabled: bool,
-    store: SessionStore,
-    expiry_duration: Duration,
-    prune_duration: Duration,
+    store: HashMap<Uuid, Session>,
+    /// The maximum duration that a session may be allowed to persist for
+    /// regardless of inactivity.
+    session_duration: Duration,
+    /// The duration a session will persist for if inactive.
+    inactive_duration: Duration,
+    /// How often the session store is pruned
+    prune_rate: Duration,
+    /// When the list was last pruned
     last_prune: Instant,
 }
 
-impl Default for InternalSessionManager {
+impl Default for SessionManager {
     fn default() -> Self {
-        InternalSessionManager::new(Duration::from_secs(60*60), Duration::from_secs(60*10))
+        SessionManager::new(
+            Duration::from_secs(12 * 3600), // 12 hours session duration
+            Duration::from_secs(3600),      //  1 hour  inactive duration
+            Duration::from_secs(600)        // 10 mins  prune rate
+        )
     }
 }
 
-impl InternalSessionManager {
-    pub fn new(expiry_duration: Duration, prune_duration: Duration) -> InternalSessionManager {
-        InternalSessionManager {
+impl SessionManager {
+    pub fn new(
+        session_duration: Duration,
+        inactive_duration: Duration,
+        prune_rate: Duration,
+    ) -> SessionManager {
+        SessionManager {
             is_enabled: true,
             store: HashMap::new(),
-            expiry_duration,
-            prune_duration,
+            session_duration,
+            inactive_duration,
+            prune_rate,
             last_prune: Instant::now(),
         }
     }
@@ -74,14 +84,20 @@ impl InternalSessionManager {
         self.store.clear();
     }
 
-    /// sets the expiry duration for sessions
-    pub fn set_expiry_duration(&mut self, duration: Duration) {
-        self.expiry_duration = duration;
+    /// sets the maximum duration that a session may be allowed to persist for 
+    /// regardless of inactivity
+    pub fn set_session_duration(&mut self, duration: Duration) {
+        self.session_duration = duration;
     }
 
-    /// sets the try_prune duration for sessions
-    pub fn set_prune_duration(&mut self, duration: Duration) {
-        self.prune_duration = duration;
+    /// sets the expiry duration for sessions
+    pub fn set_inactive_duration(&mut self, duration: Duration) {
+        self.inactive_duration = duration;
+    }
+
+    /// sets the prune rate for sessions, will attempt to prune old sessions every `duration`
+    pub fn set_prune_rate(&mut self, duration: Duration) {
+        self.prune_rate = duration;
     }
 
     /// generates a new session id without storing a session
@@ -90,9 +106,9 @@ impl InternalSessionManager {
     }
 
     /// generates a new session and returns the ID
-    pub fn create_session(&mut self) -> Option<Uuid> {
+    pub fn create_session(&mut self) -> Uuid {
         if !self.is_enabled() {
-            return None;
+            return Uuid::nil();
         }
         let mut out;
         loop {
@@ -101,21 +117,24 @@ impl InternalSessionManager {
                 break;
             }
         }
-        self.store.insert(out, Session::new(out));
+        self.store.insert(out, Session::new());
         self.try_prune();
-        Some(out)
+        out
     }
 
     /// writes `value` to the key-value session store as `key` for the `session_id` session store.
-    pub fn write_session(&mut self, session_id: &Option<Uuid>, key: &str, value: &str) -> bool {
+    pub fn write_session(&mut self, session_id: Uuid, key: &str, value: &str) -> bool {
         if !self.is_enabled() {
             return false;
         }
-        if session_id.is_none() {
+        if session_id.is_nil() {
+            self.try_prune();
             return false;
         }
-        if let Some(session) = self.store.get_mut(&session_id.unwrap()) {
-            session.last_mutated = Instant::now();
+        if let Some(session) = self.store.get_mut(&session_id) {
+            let now = Instant::now();
+            session.last_mutated = now;
+            *session.last_accessed.write().unwrap() = now.into();
             if value.is_empty() {
                 session.data.remove(key);
                 session.data.shrink_to_fit();
@@ -129,14 +148,15 @@ impl InternalSessionManager {
     }
 
     /// reads the value associated with `key` for the `session_id` session store.
-    pub fn read_session(&self, session_id: &Option<Uuid>, key: &str) -> Option<String> {
+    pub fn read_session(&self, session_id: Uuid, key: &str) -> Option<String> {
         if !self.is_enabled() {
             return None;
         }
-        if session_id.is_none() {
+        if session_id.is_nil() {
             return None;
         }
-        if let Some(session) = self.store.get(&session_id.unwrap()) {
+        if let Some(session) = self.store.get(&session_id) {
+            *session.last_accessed.write().unwrap() = Instant::now().into();
             if let Some(value) = session.data.get(key) {
                 return Some(value.to_owned());
             }
@@ -145,61 +165,65 @@ impl InternalSessionManager {
     }
 
     /// empties the session store for `session_id`
-    pub fn clear_session(&mut self, session_id: &Option<Uuid>) {
+    pub fn clear_session(&mut self, session_id: Uuid) {
         if !self.is_enabled() {
             return;
         }
-        if session_id.is_none() {
+        if session_id.is_nil() {
+            self.try_prune();
             return;
         }
-        if let Some(session) = self.store.get_mut(&session_id.unwrap()) {
-            session.last_mutated = Instant::now();
+        if let Some(session) = self.store.get_mut(&session_id) {
+            let now = Instant::now();
+            session.last_mutated = now;
+            *session.last_accessed.write().unwrap() = now.into();
             session.data.clear();
             session.data.shrink_to_fit();
+        } else {
+            self.try_prune();
         }
-        self.try_prune();
     }
 
     /// removes the session store for `session_id`
-    pub fn delete_session(&mut self, session_id: &Option<Uuid>) {
+    pub fn delete_session(&mut self, session_id: Uuid) {
         if !self.is_enabled() {
             return;
         }
-        if session_id.is_none() {
+        if session_id.is_nil() {
             return;
         }
-        self.store.remove(&session_id.unwrap());
+        self.store.remove(&session_id);
         self.try_prune();
     }
 
     /// checks if a session store for `session_id` exists
-    pub fn session_exists(&self, session_id: &Option<Uuid>) -> bool {
+    pub fn session_exists(&self, session_id: Uuid) -> bool {
         if !self.is_enabled() {
             return false;
         }
-        if session_id.is_none() {
+        if session_id.is_nil() {
             return false;
         }
-        self.store.contains_key(&session_id.unwrap())
+        self.store.contains_key(&session_id)
     }
 
     /// Accepts a session id, creates a session with it if the ID is not already for an existing
     /// session.
     /// Returns false if the session id was not good or the store already contains the ID
-    pub fn add_session(&mut self, session_id: &Option<Uuid>) -> bool {
+    pub fn add_session(&mut self, session_id: Uuid) -> bool {
         if !self.is_enabled() {
             return false;
         }
-        if session_id.is_none() {
+        if session_id.is_nil() {
+            self.try_prune();
             return false;
         }
-        if !self.store.contains_key(&session_id.unwrap()) {
-            if let Some(id) = session_id {
-                let session = Session::new(id.clone());
-                self.store.insert(*id, session);
-                return true;
-            }
+        if !self.store.contains_key(&session_id) {
+            let session = Session::new();
+            self.store.insert(session_id, session);
+            return true;
         }
+        self.try_prune();
         false
     }
 
@@ -211,24 +235,26 @@ impl InternalSessionManager {
         if !self.is_enabled() {
             return None;
         }
-        let mut session_id = None;
+        let mut session_id = Uuid::nil();
 
         let mut is_new_session = false;
         if cookies.contains_key("id") {
             session_id = cookies.get("id")
-                .map(|id| id.value.parse::<Uuid>().ok()).flatten();
-            if !self.session_exists(&session_id) {
+                .map(|id| id.value.parse::<Uuid>().ok())
+                .flatten()
+                .unwrap_or(Uuid::nil());
+            if !self.session_exists(session_id) {
                 session_id = self.create_session();
                 is_new_session = true;
             }
-        } else if !self.session_exists(&session_id) {
+        } else if !self.session_exists(session_id) {
             session_id = self.create_session();
             is_new_session = true;
         }
-        self.try_prune();
-        if session_id.is_some() {
-            Some((session_id.unwrap(), is_new_session))
+        if !session_id.is_nil() {
+            Some((session_id, is_new_session))
         } else {
+            self.try_prune();
             None
         }
     }
@@ -237,12 +263,14 @@ impl InternalSessionManager {
         if !self.is_enabled() {
             return;
         }
-        if self.last_prune.elapsed() < self.prune_duration { return; }
+        if self.last_prune.elapsed() < self.prune_rate { return; }
         self.last_prune = Instant::now();
 
         let mut to_remove = Vec::new();
         for (id, session) in &self.store {
-            if session.last_mutated.elapsed() >= self.expiry_duration {
+            if session.last_accessed.read().unwrap().elapsed() >= self.inactive_duration {
+                to_remove.push(id.clone());
+            } else if session.created.elapsed() >= self.session_duration {
                 to_remove.push(id.clone());
             }
         }

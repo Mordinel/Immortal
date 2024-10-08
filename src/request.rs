@@ -68,7 +68,7 @@ impl<'buf> error::Error for RequestError<'buf> {}
 #[allow(dead_code)]
 impl<'buf> Request<'buf> {
     /// Construct a new request object using only a slice of u8
-    pub fn from_slice(buf: &'buf [u8]) -> Result<Self, RequestError> {
+    pub fn from_slice(buf: &'buf [u8]) -> Result<Self, RequestError<'buf>> {
         Self::new(buf, None)
     }
 

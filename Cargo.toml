@@ -14,10 +14,11 @@ license = "Apache-2.0"
 chrono = "0.4"
 colored = "2.0.4"
 debug_print = "1.0.0"
-lazy_static = "1.4.0"
 rand = "0.8.5"
 rayon = "1.10.0"
 uuid = { version = "1.8.0", features = ["fast-rng", "v4"] }
 
 [dev-dependencies]
 clap = { version = "4.5.19", features = ["derive"] }
+lazy_static = "1.4.0"
+
