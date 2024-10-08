@@ -30,7 +30,7 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use colored::*;
-use debug_print::{debug_eprintln, debug_println};
+use debug_print::debug_eprintln;
 
 #[derive(Debug)]
 pub enum ImmortalError<'a> {
@@ -108,8 +108,8 @@ fn handle_connection(
     };
     let mut buf: [u8; 4096] = [0; 4096];
     let read_sz = match stream.read(&mut buf) {
-        Err(e) => {
-            debug_eprintln!("{}", e);
+        Err(_e) => {
+            debug_eprintln!("{}", _e);
             let _ = stream.shutdown(std::net::Shutdown::Both);
             return;
         },
@@ -224,7 +224,6 @@ impl Immortal {
                 loop {
                     let (stream, _peer_addr) = listener.accept()
                         .map_err(ImmortalError::AcceptError)?;
-                    debug_println!("New client on [{}]", _peer_addr);
 
                     scope.spawn(|_s| {
                         handle_connection(
@@ -242,7 +241,6 @@ impl Immortal {
         loop {
             let (stream, _peer_addr) = listener.accept()
                 .map_err(ImmortalError::AcceptError)?;
-            debug_println!("New client on [{}]", _peer_addr);
 
             handle_connection(
                 stream,

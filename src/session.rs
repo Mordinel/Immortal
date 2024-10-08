@@ -308,6 +308,7 @@ impl SessionManager {
             debug_eprintln!("Pruned {}/{} sessions.", to_remove.len(), _total);
         }
 
+        #[cfg(not(feature = "threading"))]
         {
             let mut to_remove = Vec::new();
             for session in self.store.iter() {
@@ -316,11 +317,11 @@ impl SessionManager {
                     to_remove.push(*session.key());
                 }
             }
-            let total = self.store.len();
+            let _total = self.store.len();
             for id in &to_remove {
                 self.store.remove(id);
             }
-            debug_eprintln!("Pruned {}/{} sessions.", to_remove.len(), total);
+            debug_eprintln!("Pruned {}/{} sessions.", to_remove.len(), _total);
         }
         self.store.shrink_to_fit();
     }
