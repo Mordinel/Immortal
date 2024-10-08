@@ -16,8 +16,7 @@ colored = "2.0.4"
 debug_print = "1.0.0"
 lazy_static = "1.4.0"
 rand = "0.8.5"
-rayon = "1.8.0"
-scoped-thread-pool = "1.0.4"
+rayon = "1.10.0"
 uuid = { version = "1.8.0", features = ["fast-rng", "v4"] }
 
 [dev-dependencies]

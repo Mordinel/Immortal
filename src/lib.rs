@@ -111,7 +111,6 @@ fn handle_connection(
         }, },
         Ok(sz) => sz,
     };
-    debug_eprintln!("SERVER <<< {read_sz} <<< {}", peer_addr.unwrap());
 
     match read_sz {
         //0 => break,
@@ -127,11 +126,9 @@ fn handle_connection(
                     match stream.write(response.serialize().as_slice()) {
                         Ok(sent) => {
                             log(&stream, &request, &response, sent);
-                            debug_eprintln!("SERVER >>> {sent} >>> {}", peer_addr.unwrap());
                         },
                         Err(_) => {
                             log(&stream, &request, &response, 0);
-                            debug_eprintln!("SERVER >>> SEND ERROR >>> !");
                         },
                     }
                     let _ = stream.shutdown(std::net::Shutdown::Both);
@@ -150,11 +147,9 @@ fn handle_connection(
             match stream.write(response.serialize().as_slice()) {
                 Ok(sent) => {
                     log(&stream, &request, &response, sent);
-                    debug_eprintln!("SERVER >>> {sent} >>> {}", peer_addr.unwrap());
                 },
                 Err(_) => {
                     log(&stream, &request, &response, 0);
-                    println!("SERVER >>> SEND ERROR >>> !");
                 },
             };
         },
@@ -215,9 +210,9 @@ impl Immortal {
         let _ = thread_pool.scope(|scope| -> Result<(), ImmortalError> {
 
             loop {
-                let (stream, peer_addr) = listener.accept()
+                let (stream, _peer_addr) = listener.accept()
                     .map_err(ImmortalError::AcceptError)?;
-                debug_println!("New client on [{peer_addr}]");
+                debug_println!("New client on [{}]", _peer_addr);
 
 
                 scope.spawn(|_s| {

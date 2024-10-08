@@ -6,8 +6,6 @@ use super::{
     util::is_redirect,
 };
 
-use debug_print::debug_eprintln;
-
 pub type Handler = fn(&mut Context);
 
 /// provides an API to register and lookup HTTP routes
@@ -17,7 +15,7 @@ pub struct Router {
 }
 
 fn not_implemented(ctx: &mut Context) {
-    debug_eprintln!("ERROR: default fallback handler fired, you probably mean to replace this.");
+    eprintln!("ERROR: default fallback handler fired, you probably mean to replace this.");
     ctx.response.code = "501";
     ctx.response.body = b"<h1>501: Not Implemented</h1>".to_vec();
 }
