@@ -1,6 +1,6 @@
 
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use crate::session::SessionManager;
 use crate::request::Request;
@@ -47,7 +47,7 @@ impl Response<'_> {
     /// Constructs a default response based on the passed request.
     pub fn new(
         req: &mut Request,
-        session_manager: Arc<RwLock<SessionManager>>,
+        session_manager: Arc<SessionManager>,
         session_id: &mut Uuid
     ) -> Self {
         let mut headers: HashMap<&str, String> = HashMap::new();
@@ -56,7 +56,7 @@ impl Response<'_> {
         headers.insert("Connection", "close".to_string());
         headers.insert("Content-Type", "text/html".to_string());
 
-        let sm_is_enabled = session_manager.read().unwrap().is_enabled();
+        let sm_is_enabled = session_manager.is_enabled();
         if sm_is_enabled {
             if let Some(cookie) = req.cookies.get("id") {
                 if let Ok(id) = cookie.value.parse::<Uuid>() {
@@ -65,11 +65,9 @@ impl Response<'_> {
             }
         }
 
-        let mut sm = session_manager.write().unwrap();
-        let sm_should_gen_id = sm.is_enabled() 
-                && !sm.add_session(*session_id) 
-                && !sm.session_exists(*session_id);
-        drop(sm);
+        let sm_should_gen_id = session_manager.is_enabled() 
+                && !session_manager.add_session(*session_id) 
+                && !session_manager.session_exists(*session_id);
 
         let mut should_add_cookie = false;
         if sm_should_gen_id {
@@ -78,7 +76,7 @@ impl Response<'_> {
         }
 
         let mut cookies: Vec<Cookie> = Vec::new();
-        let sm_is_enabled = session_manager.read().unwrap().is_enabled();
+        let sm_is_enabled = session_manager.is_enabled();
         if sm_is_enabled && should_add_cookie {
             if !session_id.is_nil() {
                 let cookie = Cookie::builder()
@@ -178,4 +176,16 @@ impl Response<'_> {
             Some(thing) => Some(thing.as_str()),
         }
     }
+
+    pub fn is_redirect(&self) -> bool {
+        let mut cases = 0;
+        if self.code.starts_with('3') {
+            cases += 1;
+        }
+        if self.header("Location").is_some() {
+            cases += 1;
+        }
+        cases == 2
+    }
 }
+

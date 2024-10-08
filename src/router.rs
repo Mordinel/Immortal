@@ -1,10 +1,7 @@
 
 use std::collections::HashMap;
 
-use super::{
-    context::Context, 
-    util::is_redirect,
-};
+use crate::context::Context;
 
 pub type Handler = fn(&mut Context);
 
@@ -61,8 +58,11 @@ impl Router {
     /// tries to call a registered path
     /// if it fails, the fallback is automatically called.
     /// if response is already a redirect, don't call.
-    pub fn call(&self, method: &str, ctx: &mut Context) {
-        if is_redirect(ctx.response) {
+    pub fn call(&self, ctx: &mut Context) {
+        let method = ctx.request.method.as_str();
+        let document = ctx.request.document.as_str();
+
+        if ctx.response.is_redirect() {
             return;
         }
         let by_method = match self.routes.get(method) {
@@ -72,7 +72,7 @@ impl Router {
             },
             Some(inner) => inner,
         };
-        let func = match by_method.get(&ctx.request.document) {
+        let func = match by_method.get(document) {
             None => {
                 (self.fallback)(ctx);
                 return;

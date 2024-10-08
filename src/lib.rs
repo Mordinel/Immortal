@@ -1,4 +1,5 @@
 #![feature(iter_intersperse)]
+
 pub mod context;
 pub mod cookie;
 pub mod middleware;
@@ -21,10 +22,11 @@ use uuid::Uuid;
 use std::fmt::Display;
 use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream, SocketAddr};
+use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use std::error;
-use std::thread;
-use std::sync::{Arc, RwLock};
+use std::thread::{self, JoinHandle};
+use std::sync::Arc;
 
 use chrono::Utc;
 use colored::*;
@@ -35,6 +37,7 @@ pub enum ImmortalError<'a> {
     /// Io: std::io::Error
     Io(io::Error),
     /// Rayon: Thread Pool Build Error
+    #[cfg(feature = "threading")]
     Tpbe(rayon::ThreadPoolBuildError),
     /// TCP accept() failed
     AcceptError(io::Error),
@@ -95,7 +98,7 @@ fn log(stream: &TcpStream, req: &Request, resp: &Response, sent: usize) {
 /// Reads the TcpStream and handles errors while reading
 fn handle_connection(
     mut stream: TcpStream,
-    session_manager: Arc<RwLock<SessionManager>>,
+    session_manager: Arc<SessionManager>,
     middleware: &Middleware,
     router: &Router
 ) {
@@ -143,7 +146,7 @@ fn handle_connection(
             let mut ctx = Context::new(&request, &mut response, session_id, session_manager.clone());
 
             middleware.run(&mut ctx);
-            router.call(&request.method, &mut ctx);
+            router.call(&mut ctx);
 
             match stream.write(response.serialize().as_slice()) {
                 Ok(sent) => {
@@ -163,7 +166,9 @@ fn handle_connection(
 pub struct Immortal {
     middleware: Middleware,
     router: Router,
-    session_manager: Arc<RwLock<SessionManager>>,
+    session_manager: Arc<SessionManager>,
+    #[allow(dead_code)]
+    session_prune_task: Option<(JoinHandle<()>, Arc<AtomicBool>)>,
 }
 
 #[allow(dead_code)]
@@ -173,7 +178,8 @@ impl Immortal {
         Self {
             middleware: Middleware::new(),
             router: Router::new(),
-            session_manager: Arc::new(RwLock::new(SessionManager::default())),
+            session_manager: Arc::new(SessionManager::default()),
+            session_prune_task: None,
         }
     }
 
@@ -192,9 +198,12 @@ impl Immortal {
     }
 
     /// Listens for incoming connections using a specific amount of threads
+    ///
+    /// If `threading` feature is not present, `thread_count` will be ignored
     pub fn listen_with<S>(
         &self,
         socket_addr: S,
+        #[allow(unused_variables)]
         thread_count: usize
     ) -> Result<(), ImmortalError> where S: Into<SocketAddr> {
         let socket_addr: SocketAddr = socket_addr.into();
@@ -203,29 +212,47 @@ impl Immortal {
 
         println!("Server starting at: http://{socket_addr}");
 
-        let thread_pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(thread_count)
-            .build()
-            .map_err(ImmortalError::Tpbe)?;
+        #[cfg(feature = "threading")] 
+        {
+            let thread_pool = rayon::ThreadPoolBuilder::new()
+                .num_threads(thread_count)
+                .build()
+                .map_err(ImmortalError::Tpbe)?;
 
-        let _ = thread_pool.scope(|scope| -> Result<(), ImmortalError> {
+            let _ = thread_pool.scope(|scope| -> Result<(), ImmortalError> {
 
-            loop {
-                let (stream, _peer_addr) = listener.accept()
-                    .map_err(ImmortalError::AcceptError)?;
-                debug_println!("New client on [{}]", _peer_addr);
+                loop {
+                    let (stream, _peer_addr) = listener.accept()
+                        .map_err(ImmortalError::AcceptError)?;
+                    debug_println!("New client on [{}]", _peer_addr);
 
-                let session_manager_clone = self.session_manager.clone();
-                scope.spawn(|_s| {
-                    handle_connection(
-                        stream,
-                        session_manager_clone,
-                        &self.middleware,
-                        &self.router,
-                    );
-                });
-            }
-        });
+                    scope.spawn(|_s| {
+                        handle_connection(
+                            stream,
+                            self.session_manager.clone(),
+                            &self.middleware,
+                            &self.router,
+                        );
+                    });
+                }
+            });
+        }
+
+        #[cfg(not(feature = "threading"))]
+        loop {
+            let (stream, _peer_addr) = listener.accept()
+                .map_err(ImmortalError::AcceptError)?;
+            debug_println!("New client on [{}]", _peer_addr);
+
+            handle_connection(
+                stream,
+                self.session_manager.clone(),
+                &self.middleware,
+                &self.router,
+            );
+        }
+
+        #[cfg(feature = "threading")] 
         Ok(())
     }
 
@@ -242,7 +269,7 @@ impl Immortal {
         let mut ctx = Context::new(&request, &mut response, session_id, self.session_manager.clone());
 
         self.middleware.run(&mut ctx);
-        self.router.call(&request.method, &mut ctx);
+        self.router.call(&mut ctx);
 
         response.serialize()
     }
@@ -275,23 +302,51 @@ impl Immortal {
     }
 
     /// Sets the server-side session expiry duration
-    pub fn set_inactive_duration(&mut self, duration: Duration) {
-        self.session_manager.write().unwrap().set_inactive_duration(duration);
+    pub fn set_inactive_duration(&self, duration: Duration) {
+        self.session_manager.set_inactive_duration(duration);
     }
 
     /// Sets the prune rate for sessions, will attempt to prune old sessions every `duration`
-    pub fn set_prune_rate(&mut self, duration: Duration) {
-        self.session_manager.write().unwrap().set_prune_rate(duration);
+    pub fn set_prune_rate(&self, duration: Duration) {
+        self.session_manager.set_prune_rate(duration);
     }
 
-    /// configures sessions to be disabled, clears existing server-side sessions
+    /// Configures sessions to be disabled, clears existing server-side sessions
     pub fn disable_sessions(&mut self) {
-        self.session_manager.write().unwrap().disable();
+        self.session_manager.disable();
+
+        #[cfg(feature = "threading")]
+        if let Some((handle, stop)) = self.session_prune_task.take() {
+            stop.store(true, std::sync::atomic::Ordering::Relaxed);
+            handle.join().unwrap();
+        }
     }
 
-    /// configures sessions to be enabled
+    /// Configures sessions to be enabled
     pub fn enable_sessions(&mut self) {
-        self.session_manager.write().unwrap().enable();
+        self.session_manager.enable();
+
+        #[cfg(feature = "threading")]
+        {
+            let stop = Arc::new(AtomicBool::new(false));
+            let stop_clone = stop.clone();
+            let session_manager_clone = self.session_manager.clone();
+
+            let thread_handle = thread::spawn(|| {
+                session::session_prune_task(
+                    session_manager_clone,
+                    stop_clone,
+                );
+            });
+
+            self.session_prune_task = Some((thread_handle, stop));
+        }
+    }
+}
+
+impl Drop for Immortal {
+    fn drop(&mut self) {
+        self.disable_sessions();
     }
 }
 

@@ -10,7 +10,6 @@ use crate::util::*;
 
 use debug_print::debug_eprintln;
 
-pub type Cookies = HashMap<String, Cookie>;
 
 /// Request contains the request representation that is serialised from the main HTTP request from
 /// the socket.
@@ -25,7 +24,7 @@ pub struct Request<'buf> {
     pub headers: HashMap<String, String>,
     pub get: HashMap<String, String>,
     pub post: HashMap<String, String>,
-    pub cookies: Cookies,
+    pub cookies: HashMap<String,Cookie>,
     
     pub host: String,
     pub user_agent: String,

@@ -1,17 +1,24 @@
 use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
 use std::time::{Instant, Duration};
-use std::sync::RwLock;
+use std::sync::Arc;
+use std::sync::atomic::Ordering::Relaxed;
 
-use uuid::Uuid;
+use atomic_time::{AtomicDuration, AtomicInstant};
+use dashmap::DashMap;
 use debug_print::debug_eprintln;
+use uuid::Uuid;
 
-use super::request::Cookies;
+#[cfg(feature = "threading")]
+use rayon::prelude::*;
+
+use crate::cookie::Cookie;
 
 pub struct Session {
     data: HashMap<String, String>,
     created: Instant,
     last_mutated: Instant,
-    last_accessed: RwLock<Instant>,
+    last_accessed: Instant,
 }
 
 impl Session {
@@ -26,19 +33,32 @@ impl Session {
     }
 }
 
+pub fn session_prune_task(
+    session_manager: Arc<SessionManager>,
+    stop: Arc<AtomicBool>,
+) {
+    loop {
+        if stop.load(std::sync::atomic::Ordering::Relaxed) {
+            return;
+        }
+        session_manager.prune();
+        std::thread::sleep(Duration::from_secs(2));
+    }
+}
+
 /// provides APIs to interact with user session stores.
 pub struct SessionManager {
-    is_enabled: bool,
-    store: HashMap<Uuid, Session>,
+    is_enabled: AtomicBool,
+    store: DashMap<Uuid, Session>,
     /// The maximum duration that a session may be allowed to persist for
     /// regardless of inactivity.
-    session_duration: Duration,
+    session_duration: AtomicDuration,
     /// The duration a session will persist for if inactive.
-    inactive_duration: Duration,
+    inactive_duration: AtomicDuration,
     /// How often the session store is pruned
-    prune_rate: Duration,
+    prune_rate: AtomicDuration,
     /// When the list was last pruned
-    last_prune: Instant,
+    last_prune: AtomicInstant,
 }
 
 impl Default for SessionManager {
@@ -46,7 +66,7 @@ impl Default for SessionManager {
         SessionManager::new(
             Duration::from_secs(12 * 3600), // 12 hours session duration
             Duration::from_secs(3600),      //  1 hour  inactive duration
-            Duration::from_secs(600)        // 10 mins  prune rate
+            Duration::from_secs(60)         //  1 min   prune rate
         )
     }
 }
@@ -58,46 +78,45 @@ impl SessionManager {
         prune_rate: Duration,
     ) -> SessionManager {
         SessionManager {
-            is_enabled: true,
-            store: HashMap::new(),
-            session_duration,
-            inactive_duration,
-            prune_rate,
-            last_prune: Instant::now(),
+            is_enabled: AtomicBool::new(false),
+            store: DashMap::new(),
+            session_duration: AtomicDuration::new(session_duration),
+            inactive_duration: AtomicDuration::new(inactive_duration),
+            prune_rate: AtomicDuration::new(prune_rate),
+            last_prune: AtomicInstant::now(),
         }
     }
 
-
     /// returns true if sessions are enabled
     pub fn is_enabled(&self) -> bool {
-        self.is_enabled
+        self.is_enabled.load(Relaxed)
     }
 
     /// enables sessions
-    pub fn enable(&mut self) {
-        self.is_enabled = true;
+    pub fn enable(&self) {
+        self.is_enabled.store(true, Relaxed);
     }
 
     /// disables sessions and clears all existing sessions
-    pub fn disable(&mut self) {
-        self.is_enabled = false;
+    pub fn disable(&self) {
+        self.is_enabled.store(false, Relaxed);
         self.store.clear();
     }
 
     /// sets the maximum duration that a session may be allowed to persist for 
     /// regardless of inactivity
-    pub fn set_session_duration(&mut self, duration: Duration) {
-        self.session_duration = duration;
+    pub fn set_session_duration(&self, duration: Duration) {
+        self.session_duration.store(duration, Relaxed);
     }
 
     /// sets the expiry duration for sessions
-    pub fn set_inactive_duration(&mut self, duration: Duration) {
-        self.inactive_duration = duration;
+    pub fn set_inactive_duration(&self, duration: Duration) {
+        self.inactive_duration.store(duration, Relaxed);
     }
 
     /// sets the prune rate for sessions, will attempt to prune old sessions every `duration`
-    pub fn set_prune_rate(&mut self, duration: Duration) {
-        self.prune_rate = duration;
+    pub fn set_prune_rate(&self, duration: Duration) {
+        self.prune_rate.store(duration, Relaxed);
     }
 
     /// generates a new session id without storing a session
@@ -106,7 +125,7 @@ impl SessionManager {
     }
 
     /// generates a new session and returns the ID
-    pub fn create_session(&mut self) -> Uuid {
+    pub fn create_session(&self) -> Uuid {
         if !self.is_enabled() {
             return Uuid::nil();
         }
@@ -118,23 +137,26 @@ impl SessionManager {
             }
         }
         self.store.insert(out, Session::new());
-        self.try_prune();
+
+        #[cfg(not(feature = "threading"))]
+        self.prune();
         out
     }
 
     /// writes `value` to the key-value session store as `key` for the `session_id` session store.
-    pub fn write_session(&mut self, session_id: Uuid, key: &str, value: &str) -> bool {
+    pub fn write_session(&self, session_id: Uuid, key: &str, value: &str) -> bool {
         if !self.is_enabled() {
             return false;
         }
         if session_id.is_nil() {
-            self.try_prune();
+            #[cfg(not(feature = "threading"))]
+            self.prune();
             return false;
         }
-        if let Some(session) = self.store.get_mut(&session_id) {
+        if let Some(mut session) = self.store.get_mut(&session_id) {
             let now = Instant::now();
             session.last_mutated = now;
-            *session.last_accessed.write().unwrap() = now.into();
+            session.last_accessed = now.into();
             if value.is_empty() {
                 session.data.remove(key);
                 session.data.shrink_to_fit();
@@ -143,7 +165,8 @@ impl SessionManager {
             }
             return true;
         }
-        self.try_prune();
+        #[cfg(not(feature = "threading"))]
+        self.prune();
         false
     }
 
@@ -155,8 +178,8 @@ impl SessionManager {
         if session_id.is_nil() {
             return None;
         }
-        if let Some(session) = self.store.get(&session_id) {
-            *session.last_accessed.write().unwrap() = Instant::now().into();
+        if let Some(mut session) = self.store.get_mut(&session_id) {
+            session.last_accessed = Instant::now();
             if let Some(value) = session.data.get(key) {
                 return Some(value.to_owned());
             }
@@ -165,27 +188,29 @@ impl SessionManager {
     }
 
     /// empties the session store for `session_id`
-    pub fn clear_session(&mut self, session_id: Uuid) {
+    pub fn clear_session(&self, session_id: Uuid) {
         if !self.is_enabled() {
             return;
         }
         if session_id.is_nil() {
-            self.try_prune();
+            #[cfg(not(feature = "threading"))]
+            self.prune();
             return;
         }
-        if let Some(session) = self.store.get_mut(&session_id) {
+        if let Some(mut session) = self.store.get_mut(&session_id) {
             let now = Instant::now();
             session.last_mutated = now;
-            *session.last_accessed.write().unwrap() = now.into();
+            session.last_accessed = now.into();
             session.data.clear();
             session.data.shrink_to_fit();
         } else {
-            self.try_prune();
+            #[cfg(not(feature = "threading"))]
+            self.prune();
         }
     }
 
     /// removes the session store for `session_id`
-    pub fn delete_session(&mut self, session_id: Uuid) {
+    pub fn delete_session(&self, session_id: Uuid) {
         if !self.is_enabled() {
             return;
         }
@@ -193,7 +218,8 @@ impl SessionManager {
             return;
         }
         self.store.remove(&session_id);
-        self.try_prune();
+        #[cfg(not(feature = "threading"))]
+        self.prune();
     }
 
     /// checks if a session store for `session_id` exists
@@ -210,12 +236,13 @@ impl SessionManager {
     /// Accepts a session id, creates a session with it if the ID is not already for an existing
     /// session.
     /// Returns false if the session id was not good or the store already contains the ID
-    pub fn add_session(&mut self, session_id: Uuid) -> bool {
+    pub fn add_session(&self, session_id: Uuid) -> bool {
         if !self.is_enabled() {
             return false;
         }
         if session_id.is_nil() {
-            self.try_prune();
+            #[cfg(not(feature = "threading"))]
+            self.prune();
             return false;
         }
         if !self.store.contains_key(&session_id) {
@@ -223,7 +250,8 @@ impl SessionManager {
             self.store.insert(session_id, session);
             return true;
         }
-        self.try_prune();
+        #[cfg(not(feature = "threading"))]
+        self.prune();
         false
     }
 
@@ -231,7 +259,7 @@ impl SessionManager {
     /// if a session does not exist, a session is created.
     /// The returned tuple contains the session id and a boolean, the boolean is true if the
     /// created session is new, if it is false, the session id is for an existing session.
-    pub fn get_or_create_session(&mut self, cookies: &Cookies) -> Option<(Uuid, bool)>{
+    pub fn get_or_create_session(&self, cookies: &HashMap<String, Cookie>) -> Option<(Uuid, bool)>{
         if !self.is_enabled() {
             return None;
         }
@@ -254,30 +282,53 @@ impl SessionManager {
         if !session_id.is_nil() {
             Some((session_id, is_new_session))
         } else {
-            self.try_prune();
+            #[cfg(not(feature = "threading"))]
+            self.prune();
             None
         }
     }
 
-    fn try_prune(&mut self) {
+    pub fn prune(&self) {
+        #[cfg(not(feature = "threading"))]
         if !self.is_enabled() {
             return;
         }
-        if self.last_prune.elapsed() < self.prune_rate { return; }
-        self.last_prune = Instant::now();
 
-        let mut to_remove = Vec::new();
-        for (id, session) in &self.store {
-            if session.last_accessed.read().unwrap().elapsed() >= self.inactive_duration {
-                to_remove.push(id.clone());
-            } else if session.created.elapsed() >= self.session_duration {
-                to_remove.push(id.clone());
-            }
+        if self.last_prune.load(Relaxed).elapsed() < self.prune_rate.load(Relaxed) { return; }
+        self.last_prune.store(Instant::now(), Relaxed);
+
+        #[cfg(feature = "threading")]
+        {
+            let pruned = self.store.par_iter_mut()
+                .filter(|pair| {
+                    if pair.last_accessed.elapsed() >= self.inactive_duration.load(Relaxed) {
+                        return true;
+                    } else if pair.created.elapsed() >= self.session_duration.load(Relaxed) {
+                        return true;
+                    }
+                    return false;
+                }).map(|pair| {
+                    self.store.remove(pair.pair().0).is_some() as usize
+                }).sum::<usize>();
+            let total = self.store.len();
+            debug_eprintln!("Pruned {pruned}/{total} sessions.");
         }
 
-        debug_eprintln!("Pruning {} of {} sessions", to_remove.len(), self.store.len());
-        for id in to_remove {
-            self.store.remove(&id);
+        #[cfg(not(feature = "threading"))]
+        {
+            let mut to_remove = Vec::new();
+            for session in self.store.iter() {
+                if session.value().last_accessed.elapsed() >= self.inactive_duration.load(Relaxed) {
+                    to_remove.push(session.key().clone());
+                } else if session.created.elapsed() >= self.session_duration.load(Relaxed) {
+                    to_remove.push(session.key().clone());
+                }
+            }
+
+            for id in &to_remove {
+                self.store.remove(&id);
+            }
+            debug_eprintln!("Pruned {}/{} sessions.", to_remove.len(), self.store.len());
         }
         self.store.shrink_to_fit();
     }

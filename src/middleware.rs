@@ -1,9 +1,6 @@
 
-use super::{
-    router::Handler,
-    context::Context,
-    util::is_redirect,
-};
+use crate::router::Handler;
+use crate::context::Context;
 
 /// Provides middleware functionality
 pub struct Middleware {
@@ -29,7 +26,7 @@ impl Middleware {
     /// Runs all the middleware on the `ctx`
     pub fn run(&self, ctx: &mut Context) {
         for func in &self.middleware {
-            if is_redirect(ctx.response) {
+            if ctx.response.is_redirect() {
                 return;
             }
             func(ctx);
