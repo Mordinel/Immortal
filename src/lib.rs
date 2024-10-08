@@ -301,7 +301,13 @@ impl Immortal {
         self.router.fallback = func;
     }
 
-    /// Sets the server-side session expiry duration
+    /// sets the maximum duration that a session may be allowed to persist for
+    /// regardless of inactivity
+    pub fn set_session_duration(&self, duration: Duration) {
+        self.session_manager.set_session_duration(duration);
+    }
+
+    /// Sets the server-side session inactivity expiry duration
     pub fn set_inactive_duration(&self, duration: Duration) {
         self.session_manager.set_inactive_duration(duration);
     }

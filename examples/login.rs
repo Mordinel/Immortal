@@ -10,8 +10,10 @@ use immortal_http::{
 fn main() {
     let mut immortal = Immortal::new();
 
+    immortal.set_session_duration(Duration::from_secs(1800));
     immortal.set_inactive_duration(Duration::from_secs(600));
     immortal.set_prune_rate(Duration::from_secs(60));
+    immortal.enable_sessions();
 
     immortal.fallback(|ctx| {
         ctx.response.code = "404";

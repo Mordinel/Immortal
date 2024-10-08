@@ -6,7 +6,7 @@ use std::sync::atomic::Ordering::Relaxed;
 
 use atomic_time::{AtomicDuration, AtomicInstant};
 use dashmap::DashMap;
-use debug_print::debug_eprintln;
+use debug_print::{debug_eprintln, debug_println};
 use uuid::Uuid;
 
 #[cfg(feature = "threading")]
@@ -299,7 +299,7 @@ impl SessionManager {
 
         #[cfg(feature = "threading")]
         {
-            let pruned = self.store.par_iter_mut()
+            let to_remove = self.store.par_iter()
                 .filter(|pair| {
                     if pair.last_accessed.elapsed() >= self.inactive_duration.load(Relaxed) {
                         return true;
@@ -308,10 +308,11 @@ impl SessionManager {
                     }
                     return false;
                 }).map(|pair| {
-                    self.store.remove(pair.pair().0).is_some() as usize
-                }).sum::<usize>();
+                    pair.pair().0.clone()
+                }).collect::<Vec<Uuid>>();
             let total = self.store.len();
-            debug_eprintln!("Pruned {pruned}/{total} sessions.");
+            to_remove.par_iter().for_each(|id| { self.store.remove(id); });
+            debug_eprintln!("Pruned {}/{} sessions.", to_remove.len(), total);
         }
 
         #[cfg(not(feature = "threading"))]
@@ -324,11 +325,11 @@ impl SessionManager {
                     to_remove.push(session.key().clone());
                 }
             }
-
+            let total = self.store.len();
             for id in &to_remove {
                 self.store.remove(&id);
             }
-            debug_eprintln!("Pruned {}/{} sessions.", to_remove.len(), self.store.len());
+            debug_eprintln!("Pruned {}/{} sessions.", to_remove.len(), total);
         }
         self.store.shrink_to_fit();
     }
