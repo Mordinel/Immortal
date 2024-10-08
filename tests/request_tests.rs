@@ -5,6 +5,7 @@ mod tests {
 
     use immortal_http::request::{Request, RequestError};
     use immortal_http::Immortal;
+    use uuid::Uuid;
 
     #[test]
     fn test_middleware_redirects() {
@@ -21,6 +22,26 @@ mod tests {
         });
         let request_buffer = b"GET / HTTP/1.1".to_vec();
         imm.process_buffer(&request_buffer);
+    }
+
+    #[test]
+    fn test_sessions_work() {
+        let mut imm = Immortal::new();
+        imm.enable_sessions();
+
+        imm.register("GET", "/", |ctx| {
+            assert!(!ctx.session_id.is_nil());
+            assert!(!ctx.response.cookies.is_empty());
+
+            for cookie in ctx.response.cookies.iter() {
+                if cookie.name == "id" {
+                    let id = cookie.value.parse::<Uuid>().unwrap();
+                    assert_eq!(id, ctx.session_id);
+                }
+            }
+        });
+
+        imm.process_buffer(b"GET / HTTP/1.1");
     }
 
     #[test]

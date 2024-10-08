@@ -6,7 +6,7 @@ use std::sync::atomic::Ordering::Relaxed;
 
 use atomic_time::{AtomicDuration, AtomicInstant};
 use dashmap::DashMap;
-use debug_print::{debug_eprintln, debug_println};
+use debug_print::debug_eprintln;
 use uuid::Uuid;
 
 #[cfg(feature = "threading")]

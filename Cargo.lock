@@ -291,7 +291,7 @@ dependencies = [
 
 [[package]]
 name = "immortal-http"
-version = "0.1.7"
+version = "0.2.1"
 dependencies = [
  "atomic-time",
  "chrono",
