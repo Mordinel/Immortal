@@ -1,4 +1,6 @@
 
+use std::fmt::Display;
+
 use super::util::is_param_name_valid;
 
 #[allow(dead_code)]
@@ -30,8 +32,8 @@ impl Default for Cookie {
     }
 }
 
-impl ToString for Cookie {
-    fn to_string(&self) -> String {
+impl Display for Cookie {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut out = format!("{}={}", self.name, self.value);
         if self.secure {
             out += "; Secure";
@@ -54,7 +56,7 @@ impl ToString for Cookie {
         if self.max_age > 0 {
             out += &format!("; Max-Age={}", self.max_age);
         }
-        out
+        write!(f, "{out}")
     }
 }
 
@@ -185,6 +187,7 @@ fn parse_cookies_state_action(state: &mut ParseState, cookie: &mut Cookie, build
 }
 
 /// Take a string containing arbitrary HTTP cookies and parse them into Cookie structs
+///
 /// note: cookies parsed this way will only have their name and value members filled out, as 
 /// browsers do not echo the other components of the cookie in requests.
 pub fn parse_cookies(raw_cookies: &str) -> Vec<Cookie> {

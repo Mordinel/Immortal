@@ -3,7 +3,7 @@ use std::fmt::Display;
 use std::str::{self, Utf8Error};
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::{error, usize};
+use std::error;
 
 use crate::cookie::{Cookie, parse_cookies};
 use crate::util::*;
@@ -57,12 +57,12 @@ pub enum RequestError<'buf> {
 
     PostParamsMalformed(&'buf [u8]),
 }
-impl<'buf> Display for RequestError<'buf> {
+impl Display for RequestError<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
     }
 }
-impl<'buf> error::Error for RequestError<'buf> {}
+impl error::Error for RequestError<'_> {}
 
 #[allow(dead_code)]
 impl<'buf> Request<'buf> {
@@ -92,7 +92,7 @@ impl<'buf> Request<'buf> {
             .split(|c| *c == b' ')
             .collect::<Vec<&[u8]>>()
             .try_into()
-            .map_err(|e| RequestError::RequestLineMalformed(e))?;
+            .map_err(RequestError::RequestLineMalformed)?;
 
         let method = str::from_utf8(&request_line_items[0].to_ascii_uppercase())
             .map_err(RequestError::MethodNotUtf8)?
@@ -140,7 +140,7 @@ impl<'buf> Request<'buf> {
 
         let version = str::from_utf8(proto_version_items[1])
             .map_err(RequestError::ProtoVersionNotUtf8)?
-            .trim_end_matches(|c| c == '\r' || c == '\n' || c == '\0')
+            .trim_end_matches(|c| ['\r', '\n', '\0'].contains(&c))
             .to_string();
 
         if version != "1.1" {
@@ -194,11 +194,11 @@ impl<'buf> Request<'buf> {
                 && content_type == "application/x-www-form-urlencoded"
                 && content_length.is_some() && body.is_some() {
             let body = body.unwrap();
-            match parse_parameters(str::from_utf8(&body).unwrap_or_default()) {
+            match parse_parameters(str::from_utf8(body).unwrap_or_default()) {
                 Ok(p) => p,
                 Err(_) => {
                     debug_eprintln!("ERROR: Invalid post parameters: {}", 
-                        str::from_utf8(&body).unwrap_or(&format!("{:?}", body)));
+                        str::from_utf8(body).unwrap_or(&format!("{:?}", body)));
                     return Err(RequestError::PostParamsMalformed(body));
                 }
             }
@@ -305,7 +305,7 @@ fn request_line_header_split(to_split: &[u8]) -> (&[u8], Option<&[u8]>) {
 
     // if no crlf was found or its at index 0, strip off crlf if possible and then return it
     if crlf_start_idx == 0 || !found_cr || !found_lf {
-        let line_cleaned = match to_split.strip_suffix(&[b'\r', b'\n']) {
+        let line_cleaned = match to_split.strip_suffix(b"\r\n") {
             None => return (to_split, None),
             Some(thing) => thing,
         };

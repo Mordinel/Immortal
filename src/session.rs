@@ -28,7 +28,7 @@ impl Session {
             data: HashMap::new(),
             created: now,
             last_mutated: now,
-            last_accessed: now.into(),
+            last_accessed: now,
         }
     }
 }
@@ -156,7 +156,7 @@ impl SessionManager {
         if let Some(mut session) = self.store.get_mut(&session_id) {
             let now = Instant::now();
             session.last_mutated = now;
-            session.last_accessed = now.into();
+            session.last_accessed = now;
             if value.is_empty() {
                 session.data.remove(key);
                 session.data.shrink_to_fit();
@@ -200,7 +200,7 @@ impl SessionManager {
         if let Some(mut session) = self.store.get_mut(&session_id) {
             let now = Instant::now();
             session.last_mutated = now;
-            session.last_accessed = now.into();
+            session.last_accessed = now;
             session.data.clear();
             session.data.shrink_to_fit();
         } else {
@@ -268,8 +268,7 @@ impl SessionManager {
         let mut is_new_session = false;
         if cookies.contains_key("id") {
             session_id = cookies.get("id")
-                .map(|id| id.value.parse::<Uuid>().ok())
-                .flatten()
+                .and_then(|id| id.value.parse::<Uuid>().ok())
                 .unwrap_or(Uuid::nil());
             if !self.session_exists(session_id) {
                 session_id = self.create_session();
@@ -300,34 +299,26 @@ impl SessionManager {
         #[cfg(feature = "threading")]
         {
             let to_remove = self.store.par_iter()
-                .filter(|pair| {
-                    if pair.last_accessed.elapsed() >= self.inactive_duration.load(Relaxed) {
-                        return true;
-                    } else if pair.created.elapsed() >= self.session_duration.load(Relaxed) {
-                        return true;
-                    }
-                    return false;
-                }).map(|pair| {
-                    pair.pair().0.clone()
-                }).collect::<Vec<Uuid>>();
-            let total = self.store.len();
+                .filter(|pair| (pair.last_accessed.elapsed() >= self.inactive_duration.load(Relaxed)) 
+                            || (pair.created.elapsed()       >=  self.session_duration.load(Relaxed)))
+                .map(|pair| *pair.pair().0)
+                .collect::<Vec<Uuid>>();
+            let _total = self.store.len();
             to_remove.par_iter().for_each(|id| { self.store.remove(id); });
-            debug_eprintln!("Pruned {}/{} sessions.", to_remove.len(), total);
+            debug_eprintln!("Pruned {}/{} sessions.", to_remove.len(), _total);
         }
 
-        #[cfg(not(feature = "threading"))]
         {
             let mut to_remove = Vec::new();
             for session in self.store.iter() {
-                if session.value().last_accessed.elapsed() >= self.inactive_duration.load(Relaxed) {
-                    to_remove.push(session.key().clone());
-                } else if session.created.elapsed() >= self.session_duration.load(Relaxed) {
-                    to_remove.push(session.key().clone());
+                if (session.value().last_accessed.elapsed() >= self.inactive_duration.load(Relaxed)) 
+                            || (session.created.elapsed() >=  self.session_duration.load(Relaxed)) {
+                    to_remove.push(*session.key());
                 }
             }
             let total = self.store.len();
             for id in &to_remove {
-                self.store.remove(&id);
+                self.store.remove(id);
             }
             debug_eprintln!("Pruned {}/{} sessions.", to_remove.len(), total);
         }

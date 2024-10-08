@@ -249,9 +249,10 @@ pub fn is_param_name_valid(param: &str) -> bool {
     true
 }
 
-/// Find the index of the first item `by`, and return a tuple of two mutable string slices, the
-/// first being the slice content up to the first instance of item `by`, and the second being the
-/// slice content after the first instance of `by`.
+/// Find the index of the first item `by`, and return a tuple of two mutable string slices 
+///
+/// The first being the slice content up to the first instance of item `by`, and the second being 
+/// the slice content after the first instance of `by`.
 /// 
 /// This exists because there is no stable split_once for u8 slices
 pub fn split_once(to_split: &[u8], by: u8) -> (&[u8], Option<&[u8]>) {

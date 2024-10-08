@@ -77,15 +77,13 @@ impl Response<'_> {
 
         let mut cookies: Vec<Cookie> = Vec::new();
         let sm_is_enabled = session_manager.is_enabled();
-        if sm_is_enabled && should_add_cookie {
-            if !session_id.is_nil() {
-                let cookie = Cookie::builder()
-                    .name("id")
-                    .value(session_id.to_string().as_ref())
-                    .http_only(true)
-                    .build();
-                cookies.push(cookie);
-            }
+        if sm_is_enabled && should_add_cookie && !session_id.is_nil() {
+            let cookie = Cookie::builder()
+                .name("id")
+                .value(session_id.to_string().as_ref())
+                .http_only(true)
+                .build();
+            cookies.push(cookie);
         }
 
         Self {

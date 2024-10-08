@@ -44,12 +44,12 @@ pub enum ImmortalError<'a> {
     RequestError(RequestError<'a>),
 }
 
-impl<'a> Display for ImmortalError<'a> {
+impl Display for ImmortalError<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
     }
 }
-impl<'a> error::Error for ImmortalError<'a> {}
+impl error::Error for ImmortalError<'_> {}
 
 fn log(stream: &TcpStream, req: &Request, resp: &Response, sent: usize) {
     let remote_socket = match stream.peer_addr() {
@@ -108,11 +108,11 @@ fn handle_connection(
     };
     let mut buf: [u8; 4096] = [0; 4096];
     let read_sz = match stream.read(&mut buf) {
-        Err(e) => match e.kind() { _ => {
+        Err(e) => {
             debug_eprintln!("{}", e);
             let _ = stream.shutdown(std::net::Shutdown::Both);
             return;
-        }, },
+        },
         Ok(sz) => sz,
     };
 
