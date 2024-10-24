@@ -1,7 +1,7 @@
 
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::str::{self, Utf8Error};
+use std::str::{self, Utf8Error, Chars};
 use std::error;
 
 use colored::{Colorize, ColoredString};
@@ -10,6 +10,7 @@ use colored::{Colorize, ColoredString};
 pub enum ParseError {
     ParamNameInvalid(String),
     UrlDecodeNotUtf8(Utf8Error),
+    MalformedParams(String, String),
 }
 impl Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -114,85 +115,205 @@ pub fn url_decode(to_decode: &str) -> Result<String, ParseError> {
         .map_err(ParseError::UrlDecodeNotUtf8)?.to_string())
 }
 
+const EOF_CHAR: char = '\0';
+/// Parser for Key-Value values delimited by '='
+pub(crate) struct KVParser<'buf> {
+    len_remaining: usize,
+    chars: Chars<'buf>,
+}
+
+impl<'buf> KVParser<'buf> {
+    pub(crate) fn new(input: &'buf str) -> KVParser<'buf> {
+        KVParser {
+            len_remaining: input.len(),
+            chars: input.chars(),
+        }
+    }
+
+    pub(crate) fn as_str(&self) -> &'buf str {
+        self.chars.as_str()
+    }
+
+    pub(crate) fn first(&self) -> char {
+        self.chars.clone().next().unwrap_or(EOF_CHAR)
+    }
+
+    pub(crate) fn is_eof(&self) -> bool {
+        self.chars.as_str().is_empty()
+    }
+
+    pub(crate) fn pos_within_token(&self) -> usize {
+        self.len_remaining - self.chars.as_str().len()
+    }
+
+    pub(crate) fn reset_pos_within_token(&mut self) {
+        self.len_remaining = self.chars.as_str().len();
+    }
+
+    pub(crate) fn advance(&mut self) -> Option<char> {
+        Some(self.chars.next()?)
+    }
+
+    pub(crate) fn consume_while(&mut self, mut predicate: impl FnMut(char) -> bool) {
+        while predicate(self.first()) && !self.is_eof() {
+            self.advance();
+        }
+    }
+
+    /// Advance token parser for query KV parsing
+    pub(crate) fn query_kv_pair(&mut self) -> Option<(&'buf str, &'buf str)> {
+        if !self.chars.as_str().is_ascii() {
+            return None;
+        }
+        let iter = self.chars.clone();
+        let first_char = match self.advance() {
+            Some(c) => c,
+            None => return None,
+        };
+
+        fn is_id_start(c: char) -> bool {
+            (c == '_' || c == '-' || c == '&')
+                || ('a' <= c && c <= 'z')
+                || ('A' <= c && c <= 'Z')
+        }
+        fn is_id_continue(c: char) -> bool {
+            (c == '_' || c == '-' || c == '&')
+                || ('a' <= c && c <= 'z')
+                || ('A' <= c && c <= 'Z')
+                || ('0' <= c && c <= '9')
+        }
+
+        // get key len
+        if is_id_start(first_char) {
+            self.consume_while(|c| is_id_continue(c) && c != '=');
+        } else {
+            return None;
+        }
+        let key_len = self.pos_within_token();
+
+        match self.advance() {
+            // skip =
+            Some('=') => (),
+            // anything else, just do an empty value key
+            _ => {
+                let key = &iter.as_str()[..key_len];
+                return Some((key, ""));
+            },
+        }
+        self.reset_pos_within_token();
+
+        let first_char = match self.advance() {
+            Some(c) => c,
+            // if no more, just do an empty value key
+            None => {
+                let key = &iter.as_str()[..key_len];
+                return Some((key, ""));
+            },
+        };
+
+        if first_char != '&' {
+            self.consume_while(|c| c != '&');
+        } else {
+            let key = &iter.as_str()[..key_len];
+            return Some((key, ""));
+        }
+        let val_len = self.pos_within_token();
+        self.advance();
+        self.reset_pos_within_token();
+
+        let iter_str = iter.as_str();
+        let key = &iter_str[..key_len];
+        let value = &iter_str[(key_len+1)..(key_len+1+val_len)];
+        return Some((key, value));
+    }
+
+    /// Advance token parser for cookie KV parsing
+    pub(crate) fn cookie_kv_pair(&mut self) -> Option<(&'buf str, &'buf str)> {
+        if !self.chars.as_str().is_ascii() {
+            return None;
+        }
+        let iter = self.chars.clone();
+        let first_char = match self.advance() {
+            Some(c) => c,
+            None => return None,
+        };
+
+        fn is_id_start(c: char) -> bool {
+            (c == '_')
+                || ('a' <= c && c <= 'z')
+                || ('A' <= c && c <= 'Z')
+        }
+        fn is_id_continue(c: char) -> bool {
+            (c == '_' || c == '-')
+                || ('a' <= c && c <= 'z')
+                || ('A' <= c && c <= 'Z')
+                || ('0' <= c && c <= '9')
+        }
+
+        if is_id_start(first_char) {
+            self.consume_while(|c| is_id_continue(c) && c != '=');
+        } else {
+            return None;
+        }
+        let key_len = self.pos_within_token();
+
+        match self.advance() {
+            // skip =
+            Some('=') => (),
+            // anything else, just do an empty value key
+            _ => {
+                let key = &iter.as_str()[..key_len];
+                return Some((key, ""));
+            },
+        }
+        self.reset_pos_within_token();
+
+        let first_char = match self.advance() {
+            Some(c) => c,
+            // if no more, just do an empty value key
+            None => {
+                let key = &iter.as_str()[..key_len];
+                return Some((key, ""));
+            },
+        };
+
+        if (first_char.is_ascii_alphanumeric() || first_char.is_ascii_punctuation()) && first_char != ';' {
+            self.consume_while(|c| c != ';');
+        } else {
+            let key = &iter.as_str()[..key_len];
+            return Some((key, ""));
+        }
+        let val_len = self.pos_within_token();
+        self.advance();
+        self.reset_pos_within_token();
+
+        let iter_str = iter.as_str();
+        let key = &iter_str[..key_len];
+        let value = &iter_str[(key_len+1)..(key_len+1+val_len)];
+        return Some((key, value));
+    }
+}
+
 /// Parses an HTTP query string into a key-value hashmap
-pub fn parse_parameters(to_parse: &str) -> Result<HashMap<String, String>, ParseError> {
+/// Note: Assumes there will be no whitespace characters.
+pub fn parse_parameters<'buf>(to_parse: &'buf str) -> Result<HashMap<&'buf str, &'buf str>, ParseError> {
     if to_parse.is_empty() {
         return Ok(HashMap::new());
     }
 
-    #[derive(Debug, PartialEq, Eq)]
-    enum ParseState {
-        Name,
-        Value,
-    }
-    let mut state = ParseState::Name;
-
+    let mut pp = KVParser::new(to_parse);
     let mut params = HashMap::new();
-    let mut name = String::new();
-    let mut value;
-    let mut builder = String::new();
 
-    // perform state machine parsing on the query string
-    for c in to_parse.chars() {
-        match c {
-            // transition to value parsing
-            '=' => {
-                if state == ParseState::Value {
-                    builder.push(c);
-                    continue;
-                }
-                name = builder.clone();
-                if name.is_empty() {
-                    name = String::new();
-                } else {
-                    builder = String::new();
-                    state = ParseState::Value;
-                }
-            },
-            // transition to name parsing
-            '&' => {
-                if !name.is_empty() {
-                    value = builder;
-                    if value.is_empty() {
-                        builder = String::new();
-                    } else {
-                        builder = String::new();
-                        if is_param_name_valid(&name) {
-                            value = match url_decode(&value) {
-                                Err(_) => continue,
-                                Ok(v) => v,
-                            };
-                            params.insert(name.clone(), value.clone());
-                        } else {
-                            return Err(ParseError::ParamNameInvalid(name.to_string()));
-                        }
-                        state = ParseState::Name;
-                    }
-                }
-            },
-            _ => {
-                builder.push(c);
-            },
-        };
+    while let Some((key, value)) = pp.query_kv_pair() {
+        params.insert(key, value);
     }
 
-    if state == ParseState::Value && !name.is_empty() {
-        value = builder;
-        if !value.is_empty() && is_param_name_valid(&name) {
-            value = match url_decode(&value) {
-                Err(_) => return Ok(params),
-                Ok(v) => v,
-            };
-            params.insert(name, value);
-        }
-    }
-
-    Ok(params)
+    return Ok(params);
 }
 
 /// Accepts a slice containing unparsed headers straight from the request recieve buffer, split and
 /// parse these into a hashmap of key-value pairs where keys have all ascii values as uppercase.
-pub fn parse_headers(to_parse: &[u8]) -> Result<HashMap<String, String>, Utf8Error> {
+pub fn parse_headers<'buf>(to_parse: &'buf [u8]) -> Result<HashMap<&'buf str, &'buf str>, Utf8Error> {
     let to_parse = str::from_utf8(to_parse)?;
 
     if to_parse.is_empty() {
@@ -209,15 +330,13 @@ pub fn parse_headers(to_parse: &[u8]) -> Result<HashMap<String, String>, Utf8Err
     for raw_header in headers_vec {
         let (header_key, header_value) = match raw_header.split_once(": ") {
             None => continue,
-            Some(thing) => {
+            Some((key, value)) => {
                 // if the header value is empty or the header is invalid, skip the header
-                // is_empty is faster O(1) than is_param_name_valid O(n),
-                //  so short circuit the is_empty call first
-                if thing.1.is_empty() || !is_param_name_valid(thing.0) {
+                if value.is_empty() || !is_param_name_valid(key) {
                     continue;
                 } else {
-                    // gets the strings as copies, makes the key uppercase for case insensitivity
-                    (thing.0.to_ascii_uppercase(), thing.1.to_string())
+                    // gets the strings
+                    (key, value)
                 }
             },
         };

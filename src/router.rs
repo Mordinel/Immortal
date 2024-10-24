@@ -59,8 +59,8 @@ impl Router {
     /// if it fails, the fallback is automatically called.
     /// if response is already a redirect, don't call.
     pub fn call(&self, ctx: &mut Context) {
-        let method = ctx.request.method.as_str();
-        let document = ctx.request.document.as_str();
+        let method = ctx.request.method;
+        let document = ctx.request.document;
 
         if ctx.response.is_redirect() {
             return;

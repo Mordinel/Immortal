@@ -38,9 +38,9 @@ mod tests {
     fn test_parse_parameters() {
         let param_string = String::from("param_one=val_one&param_two=val=two&param_three=val%20three");
         let params = parse_parameters(&param_string).unwrap();
-        assert_eq!(params.get("param_one").unwrap(), "val_one");
-        assert_eq!(params.get("param_two").unwrap(), "val=two");
-        assert_eq!(params.get("param_three").unwrap(), "val three");
+        assert_eq!(*params.get("param_one").unwrap(), "val_one");
+        assert_eq!(*params.get("param_two").unwrap(), "val=two");
+        assert_eq!(*params.get("param_three").unwrap(), "val%20three");
     }
 
     #[test]
@@ -58,8 +58,8 @@ mod tests {
         buffer.append(&mut b"X-Some-Other-Header: some other value".to_vec());
         let headers = parse_headers(buffer.as_mut_slice()).unwrap();
         assert_eq!(headers.len(), 2);
-        assert_eq!(*headers.get("X-SOME-HEADER").unwrap(), "some value");
-        assert_eq!(*headers.get("X-SOME-OTHER-HEADER").unwrap(), "some other value");
+        assert_eq!(*headers.get("X-Some-Header").unwrap(), "some value");
+        assert_eq!(*headers.get("X-Some-Other-Header").unwrap(), "some other value");
     }
 
     #[test]

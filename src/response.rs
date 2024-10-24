@@ -34,20 +34,20 @@ lazy_static! {
 }
 
 #[derive(Debug)]
-pub struct Response<'a> {
+pub struct Response<'req> {
     pub body: Vec<u8>,
-    pub code: &'a str,
-    pub status: &'a str,
-    pub protocol: &'a str,
-    pub method: String,
-    pub headers: HashMap<&'a str, String>,
-    pub cookies: Vec<Cookie>,
+    pub code: &'req str,
+    pub status: &'req str,
+    pub protocol: &'req str,
+    pub method: &'req str,
+    pub headers: HashMap<&'req str, String>,
+    pub cookies: Vec<Cookie<'req>>,
 }
 
-impl Response<'_> {
+impl<'req> Response<'req> {
     /// Constructs a default response based on the passed request.
     pub fn new(
-        req: &mut Request,
+        req: &'req Request,
         session_manager: Arc<SessionManager>,
         session_id: &mut Uuid
     ) -> Self {
@@ -81,7 +81,7 @@ impl Response<'_> {
         if sm_is_enabled && should_add_cookie && !session_id.is_nil() {
             let cookie = Cookie::builder()
                 .name("id")
-                .value(session_id.to_string().as_ref())
+                .value(session_id.to_string().as_str())
                 .http_only(true)
                 .build();
             cookies.push(cookie);
@@ -92,7 +92,7 @@ impl Response<'_> {
             code: "200",
             status: "OK",
             protocol: "HTTP/1.1",
-            method: req.method.clone(),
+            method: req.method,
             headers,
             cookies,
         }
@@ -111,7 +111,7 @@ impl Response<'_> {
             code: "400",
             status: "BAD REQUEST",
             protocol: "HTTP/1.1",
-            method: "GET".to_string(),
+            method: "GET",
             headers,
             cookies: Vec::new(),
         }

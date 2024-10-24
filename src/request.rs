@@ -16,19 +16,19 @@ use debug_print::debug_eprintln;
 #[derive(Debug, Default)]
 pub struct Request<'buf> {
     pub body: Option<&'buf [u8]>,
-    pub method: String,
-    pub document: String,
-    pub query: String,
-    pub protocol: String,
-    pub version: String,
-    pub headers: HashMap<String, String>,
-    pub get: HashMap<String, String>,
-    pub post: HashMap<String, String>,
-    pub cookies: HashMap<String,Cookie>,
+    pub method: &'buf str,
+    pub document: &'buf str,
+    pub query: &'buf str,
+    pub protocol: &'buf str,
+    pub version: &'buf str,
+    pub headers: HashMap<&'buf str, &'buf str>,
+    pub get: HashMap<&'buf str, &'buf str>,
+    pub post: HashMap<&'buf str, &'buf str>,
+    pub cookies: HashMap<&'buf str, Cookie<'buf>>,
     
-    pub host: String,
-    pub user_agent: String,
-    pub content_type: String,
+    pub host: &'buf str,
+    pub user_agent: &'buf str,
+    pub content_type: &'buf str,
     pub content_length: Option<usize>,
     pub peer_addr: Option<SocketAddr>,
 }
@@ -101,15 +101,13 @@ impl<'buf> Request<'buf> {
             .try_into()
             .map_err(RequestError::RequestLineMalformed)?;
 
-        let method = str::from_utf8(&request_line_items[0].to_ascii_uppercase())
-            .map_err(RequestError::MethodNotUtf8)?
-            .to_string();
+        let method = str::from_utf8(&request_line_items[0])
+            .map_err(RequestError::MethodNotUtf8)?;
 
         let (document_slice, query) = split_once(request_line_items[1], b'?');
 
         let document = str::from_utf8(document_slice)
-            .map_err(RequestError::DocumentNotUtf8)?
-            .to_string();
+            .map_err(RequestError::DocumentNotUtf8)?;
 
         if !document.starts_with('/') {
             debug_eprintln!("ERROR: {document} does not start with /");
@@ -117,10 +115,9 @@ impl<'buf> Request<'buf> {
         }
 
         let query = match query {
-            None => "".to_string(),
+            None => "",
             Some(thing) => str::from_utf8(thing)
                 .map_err(RequestError::QueryNotUtf8)?
-                .to_string(),
         };
         
         let proto_version_items: [&[u8]; 2] = match request_line_items[2]
@@ -137,8 +134,7 @@ impl<'buf> Request<'buf> {
         };
 
         let protocol = str::from_utf8(proto_version_items[0])
-            .map_err(RequestError::ProtoNotUtf8)?
-            .to_string();
+            .map_err(RequestError::ProtoNotUtf8)?;
 
         if protocol != "HTTP" {
             debug_eprintln!("ERROR: Invalid protocol {protocol}");
@@ -147,8 +143,7 @@ impl<'buf> Request<'buf> {
 
         let version = str::from_utf8(proto_version_items[1])
             .map_err(RequestError::ProtoVersionNotUtf8)?
-            .trim_end_matches(|c| ['\r', '\n', '\0'].contains(&c))
-            .to_string();
+            .trim_end_matches(|c| ['\r', '\n', '\0'].contains(&c));
 
         if version != "1.1" {
             debug_eprintln!("ERROR: Invalid version {version}");
@@ -158,11 +153,11 @@ impl<'buf> Request<'buf> {
         let headers = parse_headers(request_headers.unwrap_or_default())
             .map_err(RequestError::HeadersNotUtf8)?;
 
-        let host = collect_header(&headers, "Host");
-        let user_agent = collect_header(&headers, "User-Agent");
-        let content_type = collect_header(&headers, "Content-Type");
-        let content_length = collect_header(&headers, "Content-Length");
-        let cookies_raw = collect_header(&headers, "Cookie");
+        let host = *headers.get("Host").unwrap_or(&"");
+        let user_agent = *headers.get("User-Agent").unwrap_or(&"");
+        let content_type = *headers.get("Content-Type").unwrap_or(&"");
+        let content_length = *headers.get("Content-Length").unwrap_or(&"");
+        let cookies_raw = *headers.get("Cookie").unwrap_or(&"");
 
         let content_length = match content_length.parse::<usize>() {
             Err(_) => None,
@@ -212,6 +207,7 @@ impl<'buf> Request<'buf> {
         } else {
             HashMap::new()
         };
+        println!("POST: {post:?}");
 
         let cookies = get_cookies(&cookies_raw);
 
@@ -237,9 +233,9 @@ impl<'buf> Request<'buf> {
     
     /// looks up HTTP headers in the internal hashmap and returns its value
     pub fn header(&self, key: &str) -> Option<&str> {
-        match self.headers.get(&key.to_ascii_uppercase()) {
+        match self.headers.get(&key) {
             None => None,
-            Some(thing) => Some(thing.as_str()),
+            Some(thing) => Some(thing),
         }
     }
 
@@ -252,7 +248,7 @@ impl<'buf> Request<'buf> {
     pub fn get(&self, key: &str) -> Option<&str> {
         match self.get.get(key) {
             None => None,
-            Some(thing) => Some(thing.as_str()),
+            Some(thing) => Some(thing),
         }
     }
 
@@ -260,31 +256,21 @@ impl<'buf> Request<'buf> {
     pub fn post(&self, key: &str) -> Option<&str> {
         match self.post.get(key) {
             None => None,
-            Some(thing) => Some(thing.as_str()),
+            Some(thing) => Some(thing),
         }
     }
 }
 
 /// Returns a hashmap of http cookies with the name value as the key
-fn get_cookies(cookies_raw: &str) -> HashMap<String, Cookie> {
+fn get_cookies<'buf>(cookies_raw: &'buf str) -> HashMap<&'buf str, Cookie<'buf>> {
     let mut cookies = HashMap::new();
 
     let cookie_vec = parse_cookies(cookies_raw);
     for cookie in cookie_vec {
-        cookies.insert(String::from(&cookie.name), cookie);
+        cookies.insert(cookie.name, cookie);
     }
 
     cookies
-}
-
-/// Accepts a hashmap and a key, returns the key value or an empty string
-/// [[[ASSUMES `key` IS A VALID NON EMPTY HEADER KEY]]]: handling errors from this will be annoying.
-fn collect_header(headers: &HashMap<String, String>, key: &str) -> String {
-    let key = key.to_ascii_uppercase();
-    match headers.get(&key) {
-        None => String::new(),
-        Some(thing) => thing.to_string(),
-    }
 }
 
 /// Find the index of the first crlf and return a tuple of two mutable string slices, the first

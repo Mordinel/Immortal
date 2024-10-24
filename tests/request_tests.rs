@@ -65,7 +65,7 @@ mod tests {
 
         assert_eq!(request.get("param_one").unwrap(), "val_one");
         assert_eq!(request.get("param_two").unwrap(), "val=two");
-        assert_eq!(request.get("param_three").unwrap(), "val three");
+        assert_eq!(request.get("param_three").unwrap(), "val%20three");
     }
 
     #[test]
@@ -77,7 +77,7 @@ mod tests {
         buffer.append(&mut b": bad header\r\n".to_vec());
         buffer.append(&mut b"8&&&x: bad header\r\n".to_vec());
         buffer.append(&mut b"X-Test-Header: test\r\n".to_vec());
-        buffer.append(&mut b"Content-type: some_content_type\r\n".to_vec());
+        buffer.append(&mut b"Content-Type: some_content_type\r\n".to_vec());
         buffer.append(&mut b"Content-Length: 13\r\n".to_vec());
         buffer.append(&mut b"\r\n".to_vec());
         buffer.append(&mut b"Hello, World!".to_vec());
@@ -101,14 +101,14 @@ mod tests {
         buffer.append(&mut b"Host: 127.0.0.1\r\n".to_vec());
         buffer.append(&mut b"Connection: close\r\n".to_vec());
         buffer.append(&mut b"Content-Type: application/x-www-form-urlencoded\r\n".to_vec());
-        buffer.append(&mut format!("Content-length: {}\r\n", query.len()).as_bytes().to_vec());
+        buffer.append(&mut format!("Content-Length: {}\r\n", query.len()).as_bytes().to_vec());
         buffer.append(&mut b"\r\n".to_vec());
         buffer.append(&mut query.to_vec());
         let request = Request::from_slice(buffer.as_mut_slice()).unwrap();
 
         assert_eq!(request.post("param_one"), Some("val_one"));
         assert_eq!(request.post("param_two"), Some("val=two"));
-        assert_eq!(request.post("param_three"), Some("val three"));
+        assert_eq!(request.post("param_three"), Some("val%20three"));
     }
 
     #[test]

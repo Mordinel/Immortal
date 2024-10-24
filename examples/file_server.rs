@@ -63,7 +63,7 @@ lazy_static! {
 
 fn web_server(ctx: &mut Context) {
     let mut path = WEB_ROOT.read().unwrap().clone();
-    let mut document = ctx.request.document.clone();
+    let mut document = ctx.request.document.to_string();
     document = collapse_chr(&document, '/');
     document = collapse_chr(&document, '.');
 

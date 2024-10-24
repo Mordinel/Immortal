@@ -66,12 +66,12 @@ fn log(stream: &TcpStream, req: &Request, resp: &Response, sent: usize) {
                                 now.timestamp_subsec_micros())
                             .bright_blue());
 
-    let method = match req.method.as_str() {
+    let method = match req.method {
         "" => "<no method>".red().bold(),
         _ => strip_for_terminal(&req.method).normal(),
     };
 
-    let document = match req.document.as_str() {
+    let document = match req.document {
         "" => "<no document>".red().bold(),
         _ => strip_for_terminal(&req.document).normal(),
     };
@@ -136,7 +136,7 @@ fn handle_connection(
             return
         },
         _ => {
-            let mut request = match Request::new(&buf, peer_addr.as_ref()) {
+            let request = match Request::new(&buf, peer_addr.as_ref()) {
                 Err(RequestError::ProtoVersionInvalid(_)) => {
                     let request = Request::bad();
                     let mut response = Response::bad();
@@ -156,7 +156,7 @@ fn handle_connection(
             };
 
             let mut session_id = Uuid::nil();
-            let mut response = Response::new(&mut request, session_manager.clone(), &mut session_id);
+            let mut response = Response::new(&request, session_manager.clone(), &mut session_id);
             let mut ctx = Context::new(&request, &mut response, session_id, session_manager.clone());
 
             middleware.run(&mut ctx);
@@ -264,13 +264,13 @@ impl Immortal {
     /// Pass a buffer through the HTTP implementation without listening on a port or dispatching
     /// tasks to threads.
     pub fn process_buffer(&mut self, request_buffer: &[u8]) -> Vec<u8> {
-        let mut request = match Request::from_slice(request_buffer) {
+        let request = match Request::from_slice(request_buffer) {
             Err(_) => return Response::bad().serialize(),
             Ok(req) => req,
         };
 
         let mut session_id = Uuid::nil();
-        let mut response = Response::new(&mut request, self.session_manager.clone(), &mut session_id);
+        let mut response = Response::new(&request, self.session_manager.clone(), &mut session_id);
         let mut ctx = Context::new(&request, &mut response, session_id, self.session_manager.clone());
 
         self.middleware.run(&mut ctx);

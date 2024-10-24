@@ -26,7 +26,7 @@ fn main() {
     });
 
     immortal.add_middleware(|ctx| {
-        match ctx.request.document.as_str() {
+        match ctx.request.document {
             "/" | "/login" | "/logout" | "/favicon.ico" => return,
             _ => {},
         }
