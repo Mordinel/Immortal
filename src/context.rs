@@ -5,21 +5,25 @@ use crate::request::Request;
 use crate::response::Response;
 use crate::session::SessionManager;
 
+use std::rc::Rc;
 use std::sync::Arc;
+use std::cell::{Ref, RefMut, RefCell};
+use std::marker::PhantomData;
 
-/// Context is a structure that is exposed to the programmer when registering closures as
-/// request handlers.
-pub struct Context<'a, 'b> {
-    pub request: &'a Request<'b>,
-    pub response: &'a mut Response<'b>,
+/// Context is a structure that is exposed to the programmer when 
+/// registering closures as request handlers.
+pub struct Context<'ptr,'req> {
+    request: Rc<RefCell<Request<'req>>>,
+    response: Rc<RefCell<Response<'req>>>,
     pub session_id: Uuid,
     session_manager: Arc<SessionManager>,
+    phantom: PhantomData<&'ptr ()>,
 }
 
 #[allow(dead_code)]
-impl<'a, 'b> Context<'a, 'b> {
-    pub fn new(request: &'a Request<'b>,
-               response: &'a mut Response<'b>, 
+impl<'ptr, 'req> Context<'ptr, 'req> {
+    pub fn new(request: Rc<RefCell<Request<'req>>>,
+               response: Rc<RefCell<Response<'req>>>, 
                session_id: Uuid,
                session_manager: Arc<SessionManager>) -> Self {
         Self {
@@ -27,7 +31,30 @@ impl<'a, 'b> Context<'a, 'b> {
             response,
             session_id,
             session_manager,
+            phantom: PhantomData,
         }
+    }
+
+    /// Borrow the reference to the request.
+    pub fn request(&self) -> Ref<Request<'req>> {
+        self.request.borrow()
+    }
+
+    /// Mutably borrow the reference to the request.
+    /// This may be needed for what appears to be a read operation because items like
+    /// headers and GET parameters are lazily parsed out of the request buffer.
+    pub fn request_mut(&mut self) -> RefMut<Request<'req>> {
+        self.request.borrow_mut()
+    }
+
+    /// Borrow the response that is to be sent back to the client.
+    pub fn response(&self) -> Ref<Response<'req>> {
+        self.response.borrow()
+    }
+
+    /// Mutably borrow the response that is to be sent back to the client.
+    pub fn response_mut(&mut self) -> RefMut<Response<'req>> {
+        self.response.borrow_mut()
     }
 
     /// Makes a write to a session with a key and value
@@ -83,8 +110,8 @@ impl<'a, 'b> Context<'a, 'b> {
 
     /// Sets the response code and location header
     pub fn redirect(&mut self, location: &str) {
-        self.response.code = "302";
-        self.response.headers.insert("Location", location.to_string());
+        self.response.borrow_mut().code = "302";
+        self.response.borrow_mut().headers.insert("Location", location.to_string());
     }
 }
 

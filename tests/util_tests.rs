@@ -38,9 +38,9 @@ mod tests {
     fn test_parse_parameters() {
         let param_string = String::from("param_one=val_one&param_two=val=two&param_three=val%20three");
         let params = parse_parameters(&param_string).unwrap();
-        assert_eq!(*params.get("param_one").unwrap(), "val_one");
-        assert_eq!(*params.get("param_two").unwrap(), "val=two");
-        assert_eq!(*params.get("param_three").unwrap(), "val%20three");
+        assert_eq!(*params.iter().find(|(k,_)| *k == "param_one").map(|(_, v)| v).unwrap(), "val_one");
+        assert_eq!(*params.iter().find(|(k,_)| *k == "param_two").map(|(_, v)| v).unwrap(), "val=two");
+        assert_eq!(*params.iter().find(|(k,_)| *k == "param_three").map(|(_, v)| v).unwrap(), "val%20three");
     }
 
     #[test]
@@ -48,45 +48,23 @@ mod tests {
         let param_string = String::from("");
         let params = parse_parameters(&param_string).unwrap();
         assert_eq!(params.len(), 0);
-        assert_eq!(params.get("param_three"), None);
+        assert_eq!(params.iter().find(|(k,_)| *k == "param_three").map(|(_,v)| v), None);
     }
 
     #[test]
     fn test_parse_headers() {
-        let mut buffer = b"".to_vec();
-        buffer.append(&mut b"X-Some-Header: some value\r\n".to_vec());
-        buffer.append(&mut b"X-Some-Other-Header: some other value".to_vec());
-        let headers = parse_headers(buffer.as_mut_slice()).unwrap();
-        assert_eq!(headers.len(), 2);
-        assert_eq!(*headers.get("X-Some-Header").unwrap(), "some value");
-        assert_eq!(*headers.get("X-Some-Other-Header").unwrap(), "some other value");
+        assert_eq!(parse_header("X-Some-Header: some value"), Some(("X-Some-Header", "some value")));
+        assert_eq!(parse_header("X-Some-Other-Header: some other value"), Some(("X-Some-Other-Header", "some other value")));
     }
 
     #[test]
     fn test_parse_headers_empty() {
-        let mut buffer = b"".to_vec();
-        let headers = parse_headers(buffer.as_mut_slice()).unwrap();
-        assert_eq!(headers.len(), 0);
-        assert_eq!(headers.get("X-SOME-HEADER"), None);
+        assert_eq!(parse_header("X-SOME-HEADER"), None);
     }
 
     #[test]
     fn test_parse_headers_junk() {
-        let mut buffer = b"aksjdf;lkajsd;flkjas;dlfjk;".to_vec();
-        let headers = parse_headers(buffer.as_mut_slice()).unwrap();
-        assert_eq!(headers.len(), 0);
-        assert_eq!(headers.get("X-SOME-HEADER"), None);
-    }
-
-    #[test]
-    fn test_parse_headers_invalid() {
-        let mut buffer = b"".to_vec();
-        buffer.append(&mut b"X-Some-Header: some value\r\n".to_vec());
-        buffer.append(&mut b"X-Some-\xffOther-Header: some other value".to_vec());
-        match parse_headers(buffer.as_mut_slice()) {
-            Err(e) => assert_eq!(e.valid_up_to(), 34),
-            _ => panic!("Expected Err()"),
-        }
+        assert_eq!(parse_header("aksjdf;lkajsd;flkjas;dlfjk;"), None);
     }
 
     #[test]

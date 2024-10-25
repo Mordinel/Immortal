@@ -1,8 +1,10 @@
 #![feature(iter_intersperse)]
 
+use std::cell::RefCell;
 use std::fmt::Display;
 use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream, SocketAddr};
+use std::rc::Rc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use std::error;
@@ -52,7 +54,7 @@ impl Display for ImmortalError<'_> {
 impl error::Error for ImmortalError<'_> {}
 
 #[inline]
-fn log(stream: &TcpStream, req: &Request, resp: &Response, sent: usize) {
+fn log(stream: &TcpStream, req: Rc<RefCell<Request>>, resp: Rc<RefCell<Response>>, sent: usize) {
     let remote_socket = match stream.peer_addr() {
         Err(_) => "<no socket>".red().bold(),
         Ok(s) => s.ip().to_string().normal(),
@@ -66,17 +68,17 @@ fn log(stream: &TcpStream, req: &Request, resp: &Response, sent: usize) {
                                 now.timestamp_subsec_micros())
                             .bright_blue());
 
-    let method = match req.method {
+    let method = match req.borrow().method {
         "" => "<no method>".red().bold(),
-        _ => strip_for_terminal(&req.method).normal(),
+        _ => strip_for_terminal(req.borrow().method).normal(),
     };
 
-    let document = match req.document {
+    let document = match req.borrow().document {
         "" => "<no document>".red().bold(),
-        _ => strip_for_terminal(&req.document).normal(),
+        _ => strip_for_terminal(&req.borrow().document).normal(),
     };
 
-    let user_agent = match req.header("User-Agent") {
+    let user_agent = match req.borrow_mut().header("User-Agent") {
         None => "<no user-agent>".red().bold(),
         Some(thing) => strip_for_terminal(thing).normal(),
     };
@@ -86,24 +88,25 @@ fn log(stream: &TcpStream, req: &Request, resp: &Response, sent: usize) {
              time_stamp,
              remote_socket,
              method,
-             code_color(resp.code),
+             code_color(resp.borrow().code),
              sent,
-             if req.query.is_empty() {
+             if req.borrow_mut().query_raw.is_empty() {
                 document
              } else {
-                format!("{}?{}", document, &strip_for_terminal(&req.query)).normal()
+                format!("{}?{}", document, &strip_for_terminal(&req.borrow_mut().query_raw)).normal()
              },
              user_agent);
 }
 
 #[inline]
-fn stream_write(stream: &mut TcpStream, request: &Request, response: &mut Response) {
-    match stream.write(response.serialize().as_slice()) {
+fn stream_write(stream: &mut TcpStream, request: Rc<RefCell<Request>>, response: Rc<RefCell<Response>>) {
+    let data = response.borrow_mut().serialize();
+    match stream.write(data.as_slice()) {
         Ok(sent) => {
-            log(&stream, &request, &response, sent);
+            log(&stream, request, response, sent);
         },
         Err(_) => {
-            log(&stream, &request, &response, 0);
+            log(&stream, request, response, 0);
         },
     }
 }
@@ -138,31 +141,33 @@ fn handle_connection(
         _ => {
             let request = match Request::new(&buf, peer_addr.as_ref()) {
                 Err(RequestError::ProtoVersionInvalid(_)) => {
-                    let request = Request::bad();
-                    let mut response = Response::bad();
-                    response.code = "505";
-                    stream_write(&mut stream, &request, &mut response);
+                    let request = Rc::new(RefCell::new(Request::bad()));
+                    let response = Rc::new(RefCell::new(Response::bad()));
+                    response.borrow_mut().code = "505";
+                    stream_write(&mut stream, request, response);
                     let _ = stream.shutdown(std::net::Shutdown::Both);
                     return;
                 },
                 Err(_) => {
-                    let request = Request::bad();
-                    let mut response = Response::bad();
-                    stream_write(&mut stream, &request, &mut response);
+                    let request = Rc::new(RefCell::new(Request::bad()));
+                    let response = Rc::new(RefCell::new(Response::bad()));
+                    stream_write(&mut stream, request, response);
                     let _ = stream.shutdown(std::net::Shutdown::Both);
                     return;
                 },
                 Ok(req) => req,
             };
 
+            let request_rc = Rc::new(RefCell::new(request));
             let mut session_id = Uuid::nil();
-            let mut response = Response::new(&request, session_manager.clone(), &mut session_id);
-            let mut ctx = Context::new(&request, &mut response, session_id, session_manager.clone());
+            let response = Response::new(request_rc.clone(), session_manager.clone(), &mut session_id);
+            let response_rc = Rc::new(RefCell::new(response));
+            let mut ctx = Context::new(request_rc.clone(), response_rc.clone(), session_id, session_manager.clone());
 
             middleware.run(&mut ctx);
             router.call(&mut ctx);
 
-            stream_write(&mut stream, &request, &mut response);
+            stream_write(&mut stream, request_rc, response_rc);
         },
     };
     let _ = stream.shutdown(std::net::Shutdown::Both);
@@ -269,14 +274,17 @@ impl Immortal {
             Ok(req) => req,
         };
 
+        let request_rc = Rc::new(RefCell::new(request));
         let mut session_id = Uuid::nil();
-        let mut response = Response::new(&request, self.session_manager.clone(), &mut session_id);
-        let mut ctx = Context::new(&request, &mut response, session_id, self.session_manager.clone());
+        let response = Response::new(request_rc.clone(), self.session_manager.clone(), &mut session_id);
+        let response_rc = Rc::new(RefCell::new(response));
+        let mut ctx = Context::new(request_rc.clone(), response_rc.clone(), session_id, self.session_manager.clone());
 
         self.middleware.run(&mut ctx);
         self.router.call(&mut ctx);
 
-        response.serialize()
+        let data = response_rc.borrow_mut().serialize();
+        data
     }
 
     /// Adds middleware that gets executed just before the router.

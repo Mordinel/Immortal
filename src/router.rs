@@ -13,8 +13,8 @@ pub struct Router {
 
 fn not_implemented(ctx: &mut Context) {
     eprintln!("ERROR: default fallback handler fired, you probably mean to replace this.");
-    ctx.response.code = "501";
-    ctx.response.body = b"<h1>501: Not Implemented</h1>".to_vec();
+    ctx.response_mut().code = "501";
+    ctx.response_mut().body = b"<h1>501: Not Implemented</h1>".to_vec();
 }
 
 impl Default for Router {
@@ -59,10 +59,10 @@ impl Router {
     /// if it fails, the fallback is automatically called.
     /// if response is already a redirect, don't call.
     pub fn call(&self, ctx: &mut Context) {
-        let method = ctx.request.method;
-        let document = ctx.request.document;
+        let method = ctx.request().method;
+        let document = ctx.request().document;
 
-        if ctx.response.is_redirect() {
+        if ctx.response().is_redirect() {
             return;
         }
         let by_method = match self.routes.get(method) {

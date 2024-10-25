@@ -1,5 +1,4 @@
 
-use std::collections::HashMap;
 use std::fmt::Display;
 use std::str::{self, Utf8Error, Chars};
 use std::error;
@@ -128,10 +127,6 @@ impl<'buf> KVParser<'buf> {
             len_remaining: input.len(),
             chars: input.chars(),
         }
-    }
-
-    pub(crate) fn as_str(&self) -> &'buf str {
-        self.chars.as_str()
     }
 
     pub(crate) fn first(&self) -> char {
@@ -296,55 +291,37 @@ impl<'buf> KVParser<'buf> {
 
 /// Parses an HTTP query string into a key-value hashmap
 /// Note: Assumes there will be no whitespace characters.
-pub fn parse_parameters<'buf>(to_parse: &'buf str) -> Result<HashMap<&'buf str, &'buf str>, ParseError> {
+pub fn parse_parameters<'buf>(to_parse: &'buf str) -> Result<Vec<(&'buf str, &'buf str)>, ParseError> {
     if to_parse.is_empty() {
-        return Ok(HashMap::new());
+        return Ok(Vec::new());
     }
 
     let mut pp = KVParser::new(to_parse);
-    let mut params = HashMap::new();
+    let mut params = Vec::new();
 
     while let Some((key, value)) = pp.query_kv_pair() {
-        params.insert(key, value);
+        params.push((key, value));
     }
 
     return Ok(params);
 }
 
-/// Accepts a slice containing unparsed headers straight from the request recieve buffer, split and
-/// parse these into a hashmap of key-value pairs where keys have all ascii values as uppercase.
-pub fn parse_headers<'buf>(to_parse: &'buf [u8]) -> Result<HashMap<&'buf str, &'buf str>, Utf8Error> {
-    let to_parse = str::from_utf8(to_parse)?;
-
-    if to_parse.is_empty() {
-        return Ok(HashMap::new());
+/// Parses an arbitrary string slice containing an unparsed header straight from the request recieve buffer.
+pub fn parse_header<'buf>(raw_header: &'buf str) -> Option<(&'buf str, &'buf str)> {
+    if raw_header.is_empty() {
+        return None;
     }
 
-    // split by crlf
-    let headers_vec: Vec<&str> = to_parse
-        .split(&"\r\n")
-        .collect();
-
-    // create a hashmap and populate it with parsed header key-value pairs
-    let mut headers = HashMap::new();
-    for raw_header in headers_vec {
-        let (header_key, header_value) = match raw_header.split_once(": ") {
-            None => continue,
-            Some((key, value)) => {
-                // if the header value is empty or the header is invalid, skip the header
-                if value.is_empty() || !is_param_name_valid(key) {
-                    continue;
-                } else {
-                    // gets the strings
-                    (key, value)
-                }
-            },
-        };
-
-        headers.insert(header_key, header_value);
+    match raw_header.split_once(": ") {
+        None => return None,
+        Some((key, value)) => {
+            if value.is_empty() || !is_param_name_valid(key) {
+                return None;
+            } else {
+                return Some((key, value));
+            }
+        },
     }
-
-    Ok(headers)
 }
 
 /// Accepts a string which is assumed to be a param name.

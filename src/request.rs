@@ -1,14 +1,13 @@
 
 use std::fmt::Display;
 use std::str::{self, Utf8Error};
-use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::error;
 
 use crate::cookie::{Cookie, parse_cookies};
 use crate::util::*;
 
-use debug_print::debug_eprintln;
+use debug_print::{debug_eprintln, debug_println};
 
 
 /// Request contains the request representation that is serialised from the main HTTP request from
@@ -18,18 +17,21 @@ pub struct Request<'buf> {
     pub body: Option<&'buf [u8]>,
     pub method: &'buf str,
     pub document: &'buf str,
-    pub query: &'buf str,
+    pub query_raw: &'buf str,
     pub protocol: &'buf str,
     pub version: &'buf str,
-    pub headers: HashMap<&'buf str, &'buf str>,
-    pub get: HashMap<&'buf str, &'buf str>,
-    pub post: HashMap<&'buf str, &'buf str>,
-    pub cookies: HashMap<&'buf str, Cookie<'buf>>,
-    
-    pub host: &'buf str,
-    pub user_agent: &'buf str,
-    pub content_type: &'buf str,
-    pub content_length: Option<usize>,
+    pub header_raw_lines: Vec<&'buf str>,
+
+    headers: Vec<(&'buf str, &'buf str)>,
+    get: Vec<(&'buf str, &'buf str)>,
+    post: Vec<(&'buf str, &'buf str)>,
+    cookies: Vec<Cookie<'buf>>,
+
+    host: Option<&'buf str>,
+    user_agent: Option<&'buf str>,
+    content_type: Option<&'buf str>,
+    content_length: Option<usize>,
+
     pub peer_addr: Option<SocketAddr>,
 }
 
@@ -150,132 +152,212 @@ impl<'buf> Request<'buf> {
             return Err(RequestError::ProtoVersionInvalid(request_line));
         }
 
-        let headers = parse_headers(request_headers.unwrap_or_default())
-            .map_err(RequestError::HeadersNotUtf8)?;
+        let header_raw_lines = str::from_utf8(request_headers.unwrap_or_default())
+            .map_err(RequestError::HeadersNotUtf8)?
+            .split(&"\r\n")
+            .collect::<Vec<_>>();
 
-        let host = *headers.get("Host").unwrap_or(&"");
-        let user_agent = *headers.get("User-Agent").unwrap_or(&"");
-        let content_type = *headers.get("Content-Type").unwrap_or(&"");
-        let content_length = *headers.get("Content-Length").unwrap_or(&"");
-        let cookies_raw = *headers.get("Cookie").unwrap_or(&"");
-
-        let content_length = match content_length.parse::<usize>() {
-            Err(_) => None,
-            Ok(len) => {
-                if let Some(mut body) = body {
-                    body = match body.get(..len) {
-                        Some(slice) => slice,
-                        None => {
-                            debug_eprintln!("ERROR: Content-Length discrepancy {} != {}",
-                                len, body.len());
-                            return Err(RequestError::ContentLengthDiscrepancy { expected: len, got: body.len() });
-                        },
-                    };
-                    if len != body.len() {
-                        debug_eprintln!("ERROR: Content-Length discrepancy {} != {}", len, body.len());
-                        return Err(RequestError::ContentLengthDiscrepancy { expected: len, got: body.len() });
-
-                    }
-                    Some(len)
-                } else {
-                    None
-                }
-            },
-        };
-
-        let get = match parse_parameters(&query) {
-            Ok(g) => g,
-            Err(_) => {
-                debug_eprintln!("ERROR: Invalid get parameters: {}", 
-                    format!("{:?}", query));
-                HashMap::new()
-            }
-        };
-
-        let post = if method == "POST"
-                && content_type == "application/x-www-form-urlencoded"
-                && content_length.is_some() && body.is_some() {
-            let body = body.unwrap();
-            match parse_parameters(str::from_utf8(body).unwrap_or_default()) {
-                Ok(p) => p,
-                Err(_) => {
-                    debug_eprintln!("ERROR: Invalid post parameters: {}", 
-                        str::from_utf8(body).unwrap_or(&format!("{:?}", body)));
-                    return Err(RequestError::PostParamsMalformed(body));
-                }
-            }
-        } else {
-            HashMap::new()
-        };
-        println!("POST: {post:?}");
-
-        let cookies = get_cookies(&cookies_raw);
+        let headers_len = header_raw_lines.len();
 
         // emit a complete Request object
         Ok(Self {
             body,
             method,
             document,
-            query,
+            query_raw: query,
             protocol,
             version,
-            headers,
-            get,
-            post,
-            cookies,
-            host,
-            user_agent,
-            content_type,
-            content_length,
+            header_raw_lines,
+            headers: Vec::with_capacity(headers_len),
+            get: Vec::new(),
+            post: Vec::new(),
+            cookies: Vec::new(),
+            host: None,
+            user_agent: None,
+            content_type: None,
+            content_length: None,
             peer_addr: peer_addr.copied(),
         })
     }
     
-    /// looks up HTTP headers in the internal hashmap and returns its value
-    pub fn header(&self, key: &str) -> Option<&str> {
-        match self.headers.get(&key) {
-            None => None,
-            Some(thing) => Some(thing),
+    pub fn host(&mut self) -> Option<&'buf str> {
+        if let Some(host) = self.host {
+            return Some(host);
+        } else {
+            if let Some(host) = self.header("Host") {
+                self.host = Some(host);
+                return Some(host);
+            } else {
+                return None;
+            }
         }
+    }
+
+    pub fn user_agent(&mut self) -> Option<&'buf str> {
+        if let Some(ua) = self.user_agent {
+            return Some(ua);
+        } else {
+            if let Some(ua) = self.header("User-Agent") {
+                self.user_agent = Some(ua);
+                return Some(ua);
+            } else {
+                return None;
+            }
+        }
+    }
+
+    pub fn content_type(&mut self) -> Option<&'buf str> {
+        if let Some(ct) = self.content_type {
+            return Some(ct);
+        } else {
+            if let Some(ct) = self.header("Content-Type") {
+                self.content_type = Some(ct);
+                return Some(ct);
+            } else {
+                return None;
+            }
+        }
+    }
+
+    pub fn content_length(&mut self) -> Option<usize> {
+        if let Some(cl) = self.content_length {
+            return Some(cl);
+        } else {
+            if let Some(cl) = self.header("Content-Length") {
+                let cl = cl.parse::<usize>().ok();
+                self.content_length = cl;
+                return cl;
+            } else {
+                return None;
+            }
+        }
+    }
+
+    /// looks up HTTP headers and returns
+    /// headers are not parsed until they are needed
+    pub fn header(&mut self, key: &str) -> Option<&'buf str> {
+        if self.header_raw_lines.is_empty() {
+            return None;
+        }
+        if let Some((_k, v)) = self.headers.iter()
+                .find(|(k, _v)| *k == key) {
+            return Some(v);
+        } else {
+            if let Some(raw) = self.header_raw_lines.iter()
+                    .find(|line| line.find(": ").map(|idx| &line[..idx] == key).unwrap_or(false)) {
+                if let Some((key, value)) = parse_header(raw) {
+                    self.headers.push((key, value));
+                    return Some(value);
+                }
+            }
+        }
+        return None;
     }
 
     /// looks up cookies keys and returns its value
-    pub fn cookie(&self, key: &str) -> Option<&Cookie> {
-        self.cookies.get(key)
+    /// cookies are not parsed until they are needed, will parse headers too.
+    pub fn cookie(&mut self, key: &str) -> Option<&Cookie<'buf>> {
+        if self.header_raw_lines.is_empty() {
+            return None;
+        }
+        if self.cookies.is_empty() {
+            if let Some(cookies_raw) = self.header("Cookie") {
+                let cookies = parse_cookies(cookies_raw);
+                if cookies.is_empty() {
+                    return None;
+                }
+                self.cookies = cookies;
+            } else {
+                return None;
+            }
+        }
+        return self.cookies.iter()
+            .find(|c| c.name == key);
     }
 
     /// looks up get parameters and returns its value
-    pub fn get(&self, key: &str) -> Option<&str> {
-        match self.get.get(key) {
-            None => None,
-            Some(thing) => Some(thing),
+    /// will parse all parameters on the first call.
+    pub fn get(&mut self, key: &str) -> Option<&str> {
+        if self.query_raw.is_empty() {
+            return None;
         }
+        if self.get.is_empty() {
+            if let Some(get) = parse_parameters(self.query_raw).ok() {
+                if get.is_empty() {
+                    return None;
+                }
+                self.get = get;
+            } else {
+                return None;
+            }
+        }
+        return self.get.iter()
+            .find(|(k, _v)| *k == key)
+            .map(|(_k, v)| *v);
     }
 
     /// looks up post parameters and returns its value
-    pub fn post(&self, key: &str) -> Option<&str> {
-        match self.post.get(key) {
-            None => None,
-            Some(thing) => Some(thing),
+    /// will parse the content_type and content_len header on the first call.
+    pub fn post(&mut self, key: &str) -> Option<&str> {
+        // method must be POST
+        if self.method != "POST" {
+            return None;
         }
+        // body must exist
+        if self.body.is_none() {
+            return None;
+        }
+        // if post is empty, go about and parse the POST values from the request body.
+        if self.post.is_empty() {
+            // must have a content length
+            if let Some(content_len) = self.content_length() {
+                // and it must be nonzero
+                if content_len == 0 {
+                    return None;
+                }
+                // and there must be a content type
+                if let Some(content_type) = self.content_type() {
+                    // and the content type must be application/x-www-form-urlencoded
+                    if content_type != "application/x-www-form-urlencoded" {
+                        return None;
+                    }
+                    // and there must be a body
+                    if let Some(body) = self.body {
+                        // and the body, up to the content length, must be UTF-8
+                        if let Some(body) = str::from_utf8(body.get(0..content_len)?).ok() {
+                            // and the body is to be treated the same as GET query parameters
+                            match parse_parameters(body) {
+                                Ok(params) if params.is_empty() => {
+                                    return None;
+                                }
+                                Ok(params) => {
+                                    // and then, search the parsed POST values for the `key`
+                                    self.post = params;
+                                    // and return it if it exists.
+                                    return self.post.iter()
+                                        .find(|(k, _v)| *k == key)
+                                        .map(|(_k, v)| *v);
+                                    },
+                                Err(err) => {
+                                    debug_println!("ERROR: Invalid post parameters: {body}: {}", err);
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // otherwise, look up the requested POST value.
+            return self.post.iter()
+                .find(|(k, _v)| *k == key)
+                .map(|(_k, v)| *v);
+        }
+        return None;
     }
-}
-
-/// Returns a hashmap of http cookies with the name value as the key
-fn get_cookies<'buf>(cookies_raw: &'buf str) -> HashMap<&'buf str, Cookie<'buf>> {
-    let mut cookies = HashMap::new();
-
-    let cookie_vec = parse_cookies(cookies_raw);
-    for cookie in cookie_vec {
-        cookies.insert(cookie.name, cookie);
-    }
-
-    cookies
 }
 
 /// Find the index of the first crlf and return a tuple of two mutable string slices, the first
-/// being the buffer slice up to the crlf, and the second being the slice content after the
-/// clrf
+/// being the buffer slice up to the crlf, and the second being the slice content after the clrf
 fn request_line_header_split(to_split: &[u8]) -> (&[u8], Option<&[u8]>) {
     let mut found_cr = false;
     let mut found_lf = false;

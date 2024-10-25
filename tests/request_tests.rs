@@ -11,8 +11,8 @@ mod tests {
     fn test_middleware_redirects() {
         let mut imm = Immortal::new();
         imm.add_middleware(|ctx| {
-            ctx.response.code = "302";
-            ctx.response.headers.insert("Location", "/".to_string());
+            ctx.response_mut().code = "302";
+            ctx.response_mut().headers.insert("Location", "/".to_string());
         });
         imm.add_middleware(|_| {
             assert!(false);
@@ -31,9 +31,9 @@ mod tests {
 
         imm.register("GET", "/", |ctx| {
             assert!(!ctx.session_id.is_nil());
-            assert!(!ctx.response.cookies.is_empty());
+            assert!(!ctx.response().cookies.is_empty());
 
-            for cookie in ctx.response.cookies.iter() {
+            for cookie in ctx.response().cookies.iter() {
                 if cookie.name == "id" {
                     let id = cookie.value.parse::<Uuid>().unwrap();
                     assert_eq!(id, ctx.session_id);
@@ -61,7 +61,7 @@ mod tests {
         buffer.append(&mut b"GET ".to_vec());
         buffer.append(&mut b"/?param_one=val_one&param_two=val=two&param_three=val%20three ".to_vec());
         buffer.append(&mut b"HTTP/1.1".to_vec());
-        let request = Request::from_slice(buffer.as_mut_slice()).unwrap();
+        let mut request = Request::from_slice(buffer.as_mut_slice()).unwrap();
 
         assert_eq!(request.get("param_one").unwrap(), "val_one");
         assert_eq!(request.get("param_two").unwrap(), "val=two");
@@ -81,12 +81,12 @@ mod tests {
         buffer.append(&mut b"Content-Length: 13\r\n".to_vec());
         buffer.append(&mut b"\r\n".to_vec());
         buffer.append(&mut b"Hello, World!".to_vec());
-        let request = Request::from_slice(buffer.as_mut_slice()).unwrap();
+        let mut request = Request::from_slice(buffer.as_mut_slice()).unwrap();
 
         assert_eq!(request.method, "POST");
-        assert_eq!(request.host, "127.0.0.1");
-        assert_eq!(request.content_type, "some_content_type");
-        assert_eq!(request.content_length, Some(13));
+        assert_eq!(request.host().unwrap(), "127.0.0.1");
+        assert_eq!(request.content_type().unwrap(), "some_content_type");
+        assert_eq!(request.content_length(), Some(13));
         assert_eq!(request.body, Some(b"Hello, World!".as_slice()));
         assert_eq!(request.header(""), None);
         assert_eq!(request.header("8&&&x"), None);
@@ -104,7 +104,7 @@ mod tests {
         buffer.append(&mut format!("Content-Length: {}\r\n", query.len()).as_bytes().to_vec());
         buffer.append(&mut b"\r\n".to_vec());
         buffer.append(&mut query.to_vec());
-        let request = Request::from_slice(buffer.as_mut_slice()).unwrap();
+        let mut request = Request::from_slice(buffer.as_mut_slice()).unwrap();
 
         assert_eq!(request.post("param_one"), Some("val_one"));
         assert_eq!(request.post("param_two"), Some("val=two"));
@@ -119,15 +119,12 @@ mod tests {
         buffer.append(&mut b"Cookie: id=9001; other_cookie=cookie_value; last-cookie=short-lived; \r\n".to_vec());
         buffer.append(&mut b"Connection: close\r\n".to_vec());
         buffer.append(&mut b"\r\n".to_vec());
-        let request = Request::from_slice(buffer.as_mut_slice()).unwrap();
+        let mut request = Request::from_slice(buffer.as_mut_slice()).unwrap();
 
-        let cookie_a = request.cookie("id").unwrap();
-        let cookie_b = request.cookie("other_cookie").unwrap();
-        let cookie_c = request.cookie("last-cookie").unwrap();
+        assert_eq!(request.cookie("id").unwrap().value, "9001");
+        assert_eq!(request.cookie("other_cookie").unwrap().value, "cookie_value");
+        assert_eq!(request.cookie("last-cookie").unwrap().value, "short-lived");
 
-        assert_eq!(cookie_a.value, "9001");
-        assert_eq!(cookie_b.value, "cookie_value");
-        assert_eq!(cookie_c.value, "short-lived");
     }
 
     #[test]
@@ -139,7 +136,7 @@ mod tests {
         buffer.append(&mut b"Content-Type: wrong content type\r\n".to_vec());
         buffer.append(&mut b"\r\n".to_vec());
         buffer.append(&mut b"param_one=val_one&param_two=val=two&param_three=val%20three".to_vec());
-        let request = Request::from_slice(buffer.as_mut_slice()).unwrap();
+        let mut request = Request::from_slice(buffer.as_mut_slice()).unwrap();
 
         assert_eq!(request.post("param_one"), None);
         assert_eq!(request.post("param_two"), None);

@@ -16,17 +16,17 @@ fn main() {
     immortal.enable_sessions();
 
     immortal.fallback(|ctx| {
-        ctx.response.code = "404";
+        ctx.response_mut().code = "404";
     });
 
     immortal.add_middleware(|ctx| {
-        ctx.response.headers.insert("X-Frame-Options", "deny".to_string());
-        ctx.response.headers.insert("X-Content-Type-Options", "nosniff".to_string());
-        ctx.response.headers.insert("Referrer-Policy", "no-referrer".to_string());
+        ctx.response_mut().headers.insert("X-Frame-Options", "deny".to_string());
+        ctx.response_mut().headers.insert("X-Content-Type-Options", "nosniff".to_string());
+        ctx.response_mut().headers.insert("Referrer-Policy", "no-referrer".to_string());
     });
 
     immortal.add_middleware(|ctx| {
-        match ctx.request.document {
+        match ctx.request().document {
             "/" | "/login" | "/logout" | "/favicon.ico" => return,
             _ => {},
         }
@@ -40,14 +40,14 @@ fn main() {
     immortal.register("GET", "/", |ctx| {
         match get_username(ctx) {
             None=> {
-                ctx.response.body.append(&mut b"<h1>Welcome to the website!</h1>".to_vec());
-                ctx.response.body.append(&mut b"<p>Click <a href=\"/login\">HERE</a> to go to the login page</p>".to_vec());
+                ctx.response_mut().body.append(&mut b"<h1>Welcome to the website!</h1>".to_vec());
+                ctx.response_mut().body.append(&mut b"<p>Click <a href=\"/login\">HERE</a> to go to the login page</p>".to_vec());
             },
             Some(username) => {
                 let username = escape_html(&username);
-                ctx.response.body.append(&mut format!("<h1>Welcome to the website, {username}!</h1>").as_bytes().to_vec());
-                ctx.response.body.append(&mut b"<p>Click <a href=\"/logout\">HERE</a> to log out</p>".to_vec());
-                ctx.response.body.append(&mut b"<p>Click <a href=\"/secret\">HERE</a> to see the secret</p>".to_vec());
+                ctx.response_mut().body.append(&mut format!("<h1>Welcome to the website, {username}!</h1>").as_bytes().to_vec());
+                ctx.response_mut().body.append(&mut b"<p>Click <a href=\"/logout\">HERE</a> to log out</p>".to_vec());
+                ctx.response_mut().body.append(&mut b"<p>Click <a href=\"/secret\">HERE</a> to see the secret</p>".to_vec());
             },
         };
     });
@@ -58,7 +58,7 @@ fn main() {
             return;
         }
 
-        ctx.response.body.append(&mut b"
+        ctx.response_mut().body.append(&mut b"
 <form action=\"/login\" method=\"post\">
 <label for=\"username\">Username: </label>
 <input type=\"text\" id=\"username\" name=\"username\" required></input><br>
@@ -71,7 +71,7 @@ fn main() {
         match get_message(ctx) {
             None => {},
             Some(message) => {
-                ctx.response.body.append(
+                ctx.response_mut().body.append(
                     &mut format!("<br><p>{}</p>", escape_html(&message)).as_bytes().to_vec()
                 );
                 clear_message(ctx);
@@ -85,11 +85,11 @@ fn main() {
             return;
         }
 
-        if ctx.request.post("username").is_some() && ctx.request.post("password").is_some() {
-            let username = ctx.request.post("username").unwrap();
-            let password = ctx.request.post("password").unwrap();
+        if ctx.request_mut().post("username").is_some() && ctx.request_mut().post("password").is_some() {
+            let username = ctx.request_mut().post("username").unwrap().to_string();
+            let password = ctx.request_mut().post("password").unwrap().to_string();
             if /*username == "admin" &&*/ password == "lemon42" { // could do a DB lookup here
-                log_in(ctx, username);
+                log_in(ctx, &username);
                 ctx.redirect("/");
                 return;
             }
@@ -110,7 +110,7 @@ fn main() {
     });
 
     immortal.register("GET", "/secret", |ctx| {
-        ctx.response.body.append("<h1>This is the super secret page</h1>".as_bytes().to_vec().as_mut());
+        ctx.response_mut().body.append("<h1>This is the super secret page</h1>".as_bytes().to_vec().as_mut());
     });
 
     if let Err(e) = immortal.listen(([127, 0, 0, 1], 7777)) {
@@ -131,7 +131,7 @@ fn log_in(ctx: &mut Context, username: &str) {
 
     let session_id = ctx.new_session();
     if !session_id.is_nil() {
-        ctx.response.cookies.push(
+        ctx.response_mut().cookies.push(
             Cookie::builder().name("id").value(&session_id.to_string()).http_only(true).build()
             );
         ctx.write_session(session_id, "username", username);

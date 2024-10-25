@@ -26,7 +26,7 @@ impl Middleware {
     /// Runs all the middleware on the `ctx`
     pub fn run(&self, ctx: &mut Context) {
         for func in &self.middleware {
-            if ctx.response.is_redirect() {
+            if ctx.response().is_redirect() {
                 return;
             }
             func(ctx);

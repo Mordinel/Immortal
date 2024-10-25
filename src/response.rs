@@ -1,5 +1,7 @@
 
+use std::rc::Rc;
 use std::collections::HashMap;
+use std::cell::RefCell;
 use std::sync::Arc;
 
 use crate::session::SessionManager;
@@ -47,7 +49,7 @@ pub struct Response<'req> {
 impl<'req> Response<'req> {
     /// Constructs a default response based on the passed request.
     pub fn new(
-        req: &'req Request,
+        req: Rc<RefCell<Request<'req>>>,
         session_manager: Arc<SessionManager>,
         session_id: &mut Uuid
     ) -> Self {
@@ -59,7 +61,7 @@ impl<'req> Response<'req> {
 
         let sm_is_enabled = session_manager.is_enabled();
         if sm_is_enabled {
-            if let Some(cookie) = req.cookies.get("id") {
+            if let Some(cookie) = req.borrow_mut().cookie("id") {
                 if let Ok(id) = cookie.value.parse::<Uuid>() {
                     *session_id = id;
                 }
@@ -92,7 +94,7 @@ impl<'req> Response<'req> {
             code: "200",
             status: "OK",
             protocol: "HTTP/1.1",
-            method: req.method,
+            method: req.borrow_mut().method,
             headers,
             cookies,
         }

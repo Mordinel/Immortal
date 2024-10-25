@@ -63,7 +63,7 @@ lazy_static! {
 
 fn web_server(ctx: &mut Context) {
     let mut path = WEB_ROOT.read().unwrap().clone();
-    let mut document = ctx.request.document.to_string();
+    let mut document = ctx.request().document.to_string();
     document = collapse_chr(&document, '/');
     document = collapse_chr(&document, '.');
 
@@ -73,9 +73,9 @@ fn web_server(ctx: &mut Context) {
         four_oh_four(ctx);
         return;
     } else if document.len() > 255 {
-        ctx.response.code = "414";
-        ctx.response.status = "URI TOO LONG";
-        ctx.response.body.extend(b"<h1>414: Uri Too Long!</h1>".iter());
+        ctx.response_mut().code = "414";
+        ctx.response_mut().status = "URI TOO LONG";
+        ctx.response_mut().body.extend(b"<h1>414: Uri Too Long!</h1>".iter());
         return;
     }
 
@@ -90,17 +90,21 @@ fn web_server(ctx: &mut Context) {
                 return;
             }
         };
+
         let mut file = BufReader::new(file);
-        match file.read_to_end(&mut ctx.response.body) {
+        let mut body = vec![];
+        match file.read_to_end(&mut body) {
             Ok(_) => (),
             Err(why) => {
                 eprintln!("ERROR: {why}");
-                ctx.response.body.clear();
+                body.clear();
                 four_oh_four(ctx);
                 return;
             },
         }
-        ctx.response.headers.insert("Content-Type", match path.extension() {
+        ctx.response_mut().body.extend_from_slice(&body);
+
+        ctx.response_mut().headers.insert("Content-Type", match path.extension() {
             Some(ext) => match ext.as_encoded_bytes() {
                 b"html" => "text/html",
                 b"css" => "text/css",
@@ -126,8 +130,8 @@ fn web_server(ctx: &mut Context) {
 }
 
 fn four_oh_four(ctx: &mut Context) {
-    ctx.response.code = "404";
-    ctx.response.body.extend(b"<h1>404: File Not Found!</h1>".iter());
+    ctx.response_mut().code = "404";
+    ctx.response_mut().body.extend(b"<h1>404: File Not Found!</h1>".iter());
 }
 
 fn collapse_chr(s: &str, chr: char) -> String {
