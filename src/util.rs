@@ -1,3 +1,4 @@
+#![allow(clippy::manual_range_contains)]
 
 use std::fmt::Display;
 use std::str::{self, Utf8Error, Chars};
@@ -146,7 +147,7 @@ impl<'buf> KVParser<'buf> {
     }
 
     pub(crate) fn advance(&mut self) -> Option<char> {
-        Some(self.chars.next()?)
+        self.chars.next()
     }
 
     pub(crate) fn consume_while(&mut self, mut predicate: impl FnMut(char) -> bool) {
@@ -219,7 +220,7 @@ impl<'buf> KVParser<'buf> {
         let iter_str = iter.as_str();
         let key = &iter_str[..key_len];
         let value = &iter_str[(key_len+1)..(key_len+1+val_len)];
-        return Some((key, value));
+        Some((key, value))
     }
 
     /// Advance token parser for cookie KV parsing
@@ -285,13 +286,13 @@ impl<'buf> KVParser<'buf> {
         let iter_str = iter.as_str();
         let key = &iter_str[..key_len];
         let value = &iter_str[(key_len+1)..(key_len+1+val_len)];
-        return Some((key, value));
+        Some((key, value))
     }
 }
 
 /// Parses an HTTP query string into a key-value hashmap
 /// Note: Assumes there will be no whitespace characters.
-pub fn parse_parameters<'buf>(to_parse: &'buf str) -> Result<Vec<(&'buf str, &'buf str)>, ParseError> {
+pub fn parse_parameters(to_parse: &str) -> Result<Vec<(&str, &str)>, ParseError> {
     if to_parse.is_empty() {
         return Ok(Vec::new());
     }
@@ -303,22 +304,22 @@ pub fn parse_parameters<'buf>(to_parse: &'buf str) -> Result<Vec<(&'buf str, &'b
         params.push((key, value));
     }
 
-    return Ok(params);
+    Ok(params)
 }
 
 /// Parses an arbitrary string slice containing an unparsed header straight from the request recieve buffer.
-pub fn parse_header<'buf>(raw_header: &'buf str) -> Option<(&'buf str, &'buf str)> {
+pub fn parse_header(raw_header: &str) -> Option<(&str, &str)> {
     if raw_header.is_empty() {
         return None;
     }
 
     match raw_header.split_once(": ") {
-        None => return None,
+        None => None,
         Some((key, value)) => {
             if value.is_empty() || !is_param_name_valid(key) {
-                return None;
+                None
             } else {
-                return Some((key, value));
+                Some((key, value))
             }
         },
     }

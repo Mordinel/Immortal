@@ -26,13 +26,13 @@ pub struct Cookie<'buf> {
     pub max_age: i64,
 }
 
-impl<'buf> Default for Cookie<'buf> {
+impl Default for Cookie<'_> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<'buf> Display for Cookie<'buf> {
+impl Display for Cookie<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut out = format!("{}={}", self.name, self.value);
         if self.secure {

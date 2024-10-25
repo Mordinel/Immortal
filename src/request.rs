@@ -103,7 +103,7 @@ impl<'buf> Request<'buf> {
             .try_into()
             .map_err(RequestError::RequestLineMalformed)?;
 
-        let method = str::from_utf8(&request_line_items[0])
+        let method = str::from_utf8(request_line_items[0])
             .map_err(RequestError::MethodNotUtf8)?;
 
         let (document_slice, query) = split_once(request_line_items[1], b'?');
@@ -182,54 +182,46 @@ impl<'buf> Request<'buf> {
     
     pub fn host(&mut self) -> Option<&'buf str> {
         if let Some(host) = self.host {
-            return Some(host);
+            Some(host)
+        } else if let Some(host) = self.header("Host") {
+            self.host = Some(host);
+            Some(host)
         } else {
-            if let Some(host) = self.header("Host") {
-                self.host = Some(host);
-                return Some(host);
-            } else {
-                return None;
-            }
+            None
         }
     }
 
     pub fn user_agent(&mut self) -> Option<&'buf str> {
         if let Some(ua) = self.user_agent {
-            return Some(ua);
+            Some(ua)
+        } else if let Some(ua) = self.header("User-Agent") {
+            self.user_agent = Some(ua);
+            Some(ua)
         } else {
-            if let Some(ua) = self.header("User-Agent") {
-                self.user_agent = Some(ua);
-                return Some(ua);
-            } else {
-                return None;
-            }
+            None
         }
     }
 
     pub fn content_type(&mut self) -> Option<&'buf str> {
         if let Some(ct) = self.content_type {
-            return Some(ct);
+            Some(ct)
+        } else if let Some(ct) = self.header("Content-Type") {
+            self.content_type = Some(ct);
+            Some(ct)
         } else {
-            if let Some(ct) = self.header("Content-Type") {
-                self.content_type = Some(ct);
-                return Some(ct);
-            } else {
-                return None;
-            }
+            None
         }
     }
 
     pub fn content_length(&mut self) -> Option<usize> {
         if let Some(cl) = self.content_length {
-            return Some(cl);
+            Some(cl)
+        } else if let Some(cl) = self.header("Content-Length") {
+            let cl = cl.parse::<usize>().ok();
+            self.content_length = cl;
+            cl
         } else {
-            if let Some(cl) = self.header("Content-Length") {
-                let cl = cl.parse::<usize>().ok();
-                self.content_length = cl;
-                return cl;
-            } else {
-                return None;
-            }
+            None
         }
     }
 
@@ -242,16 +234,14 @@ impl<'buf> Request<'buf> {
         if let Some((_k, v)) = self.headers.iter()
                 .find(|(k, _v)| *k == key) {
             return Some(v);
-        } else {
-            if let Some(raw) = self.header_raw_lines.iter()
-                    .find(|line| line.find(": ").map(|idx| &line[..idx] == key).unwrap_or(false)) {
-                if let Some((key, value)) = parse_header(raw) {
-                    self.headers.push((key, value));
-                    return Some(value);
-                }
+        } else if let Some(raw) = self.header_raw_lines.iter()
+                .find(|line| line.find(": ").map(|idx| &line[..idx] == key).unwrap_or(false)) {
+            if let Some((key, value)) = parse_header(raw) {
+                self.headers.push((key, value));
+                return Some(value);
             }
         }
-        return None;
+        None
     }
 
     /// looks up cookies keys and returns its value
@@ -271,8 +261,8 @@ impl<'buf> Request<'buf> {
                 return None;
             }
         }
-        return self.cookies.iter()
-            .find(|c| c.name == key);
+        self.cookies.iter()
+            .find(|c| c.name == key)
     }
 
     /// looks up get parameters and returns its value
@@ -282,7 +272,7 @@ impl<'buf> Request<'buf> {
             return None;
         }
         if self.get.is_empty() {
-            if let Some(get) = parse_parameters(self.query_raw).ok() {
+            if let Ok(get) = parse_parameters(self.query_raw) {
                 if get.is_empty() {
                     return None;
                 }
@@ -291,9 +281,9 @@ impl<'buf> Request<'buf> {
                 return None;
             }
         }
-        return self.get.iter()
+        self.get.iter()
             .find(|(k, _v)| *k == key)
-            .map(|(_k, v)| *v);
+            .map(|(_k, v)| *v)
     }
 
     /// looks up post parameters and returns its value
@@ -304,9 +294,8 @@ impl<'buf> Request<'buf> {
             return None;
         }
         // body must exist
-        if self.body.is_none() {
-            return None;
-        }
+        self.body?;
+
         // if post is empty, go about and parse the POST values from the request body.
         if self.post.is_empty() {
             // must have a content length
@@ -324,7 +313,7 @@ impl<'buf> Request<'buf> {
                     // and there must be a body
                     if let Some(body) = self.body {
                         // and the body, up to the content length, must be UTF-8
-                        if let Some(body) = str::from_utf8(body.get(0..content_len)?).ok() {
+                        if let Ok(body) = str::from_utf8(body.get(0..content_len)?) {
                             // and the body is to be treated the same as GET query parameters
                             match parse_parameters(body) {
                                 Ok(params) if params.is_empty() => {
@@ -338,8 +327,8 @@ impl<'buf> Request<'buf> {
                                         .find(|(k, _v)| *k == key)
                                         .map(|(_k, v)| *v);
                                     },
-                                Err(err) => {
-                                    debug_println!("ERROR: Invalid post parameters: {body}: {}", err);
+                                Err(_err) => {
+                                    debug_println!("ERROR: Invalid post parameters: {body}: {_err}");
                                 },
                             }
                         }
@@ -352,7 +341,7 @@ impl<'buf> Request<'buf> {
                 .find(|(k, _v)| *k == key)
                 .map(|(_k, v)| *v);
         }
-        return None;
+        None
     }
 }
 

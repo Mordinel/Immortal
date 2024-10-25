@@ -8,20 +8,18 @@ use crate::session::SessionManager;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::cell::{Ref, RefMut, RefCell};
-use std::marker::PhantomData;
 
 /// Context is a structure that is exposed to the programmer when 
 /// registering closures as request handlers.
-pub struct Context<'ptr,'req> {
+pub struct Context<'req> {
     request: Rc<RefCell<Request<'req>>>,
     response: Rc<RefCell<Response<'req>>>,
     pub session_id: Uuid,
     session_manager: Arc<SessionManager>,
-    phantom: PhantomData<&'ptr ()>,
 }
 
 #[allow(dead_code)]
-impl<'ptr, 'req> Context<'ptr, 'req> {
+impl<'req> Context<'req> {
     pub fn new(request: Rc<RefCell<Request<'req>>>,
                response: Rc<RefCell<Response<'req>>>, 
                session_id: Uuid,
@@ -31,7 +29,6 @@ impl<'ptr, 'req> Context<'ptr, 'req> {
             response,
             session_id,
             session_manager,
-            phantom: PhantomData,
         }
     }
 

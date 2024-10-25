@@ -75,7 +75,7 @@ fn log(stream: &TcpStream, req: Rc<RefCell<Request>>, resp: Rc<RefCell<Response>
 
     let document = match req.borrow().document {
         "" => "<no document>".red().bold(),
-        _ => strip_for_terminal(&req.borrow().document).normal(),
+        _ => strip_for_terminal(req.borrow().document).normal(),
     };
 
     let user_agent = match req.borrow_mut().header("User-Agent") {
@@ -93,7 +93,7 @@ fn log(stream: &TcpStream, req: Rc<RefCell<Request>>, resp: Rc<RefCell<Response>
              if req.borrow_mut().query_raw.is_empty() {
                 document
              } else {
-                format!("{}?{}", document, &strip_for_terminal(&req.borrow_mut().query_raw)).normal()
+                format!("{}?{}", document, &strip_for_terminal(req.borrow_mut().query_raw)).normal()
              },
              user_agent);
 }
@@ -103,10 +103,10 @@ fn stream_write(stream: &mut TcpStream, request: Rc<RefCell<Request>>, response:
     let data = response.borrow_mut().serialize();
     match stream.write(data.as_slice()) {
         Ok(sent) => {
-            log(&stream, request, response, sent);
+            log(stream, request, response, sent);
         },
         Err(_) => {
-            log(&stream, request, response, 0);
+            log(stream, request, response, 0);
         },
     }
 }
